@@ -1,193 +1,307 @@
 <title>Tandem Tutor</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Kalam:wght@400;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;800&family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Kalam:wght@400;700&display=swap">
 <style>
-/* Layout: one-screen chat. Sticky header, scrolling transcript, composer pinned to the bottom.
-   The tutor's corrections are written under your message in "red pen". */
+/* Layout: one-screen chat app. Floating glass header and composer over a colour wash
+   that changes with the language (German = tangerine/sun, French = cobalt/coral). */
 :root {
-  --paper: #F3F5F9;
-  --surface: #FFFFFF;
-  --ink: #1B2331;
-  --muted: #5B6677;
-  --rule: #DAE0E9;
-  --accent: #2C57CC;
+  --bg: #F2F4F3;
+  --surface: rgba(255, 255, 255, 0.82);
+  --solid: #FFFFFF;
+  --ink: #15171C;
+  --muted: #626A75;
+  --line: rgba(21, 23, 28, 0.09);
+  --accent: #FF4D2E;
+  --accent-2: #FFB300;
   --on-accent: #FFFFFF;
-  --pen: #C42F28;
-  --pen-wash: #FCEDEB;
-  --ok: #24764A;
-  --ok-wash: #E6F4EC;
-  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
-  --font-body: "Source Sans 3", "Segoe UI", system-ui, -apple-system, sans-serif;
-  --font-pen: "Kalam", "Comic Sans MS", "Bradley Hand", cursive;
+  --pen: #E5322D;
+  --pen-wash: #FFF0EC;
+  --ok: #0E9F6E;
+  --ok-wash: #DDF7EC;
+  --wash-1: rgba(255, 77, 46, 0.30);
+  --wash-2: rgba(255, 179, 0, 0.32);
+  --shadow: 0 10px 30px -12px rgba(21, 23, 28, 0.22);
+  --font-display: "Unbounded", "Arial Black", system-ui, sans-serif;
+  --font-body: "Plus Jakarta Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-pen: "Kalam", "Bradley Hand", "Comic Sans MS", cursive;
+}
+:root[data-lang="fr"] {
+  --accent: #2B50FF; --accent-2: #FF5C8A;
+  --wash-1: rgba(43, 80, 255, 0.26); --wash-2: rgba(255, 92, 138, 0.28);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --paper: #10141B; --surface: #1A2029; --ink: #E5E9F0; --muted: #97A2B3; --rule: #2A3241;
-    --accent: #7D9BF2; --on-accent: #0D1320; --pen: #FF7D70; --pen-wash: #2C1C1D; --ok: #62C990; --ok-wash: #16271F;
+    --bg: #0E1014; --surface: rgba(28, 31, 38, 0.80); --solid: #1C1F26; --ink: #F2F3F5; --muted: #9AA2AE;
+    --line: rgba(255, 255, 255, 0.09); --on-accent: #FFFFFF; --pen: #FF6B5E; --pen-wash: #2A1A1A; --ok: #3DDC97; --ok-wash: #12261E;
+    --wash-1: rgba(255, 77, 46, 0.22); --wash-2: rgba(255, 179, 0, 0.14);
+    --shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.7);
     color-scheme: dark;
   }
+  :root[data-lang="fr"]:not([data-theme="light"]) { --accent: #5B76FF; --wash-1: rgba(43, 80, 255, 0.26); --wash-2: rgba(255, 92, 138, 0.16); }
 }
 :root[data-theme="dark"] {
-  --paper: #10141B; --surface: #1A2029; --ink: #E5E9F0; --muted: #97A2B3; --rule: #2A3241;
-  --accent: #7D9BF2; --on-accent: #0D1320; --pen: #FF7D70; --pen-wash: #2C1C1D; --ok: #62C990; --ok-wash: #16271F;
+  --bg: #0E1014; --surface: rgba(28, 31, 38, 0.80); --solid: #1C1F26; --ink: #F2F3F5; --muted: #9AA2AE;
+  --line: rgba(255, 255, 255, 0.09); --on-accent: #FFFFFF; --pen: #FF6B5E; --pen-wash: #2A1A1A; --ok: #3DDC97; --ok-wash: #12261E;
+  --wash-1: rgba(255, 77, 46, 0.22); --wash-2: rgba(255, 179, 0, 0.14);
+  --shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.7);
   color-scheme: dark;
 }
+:root[data-theme="dark"][data-lang="fr"] { --accent: #5B76FF; --wash-1: rgba(43, 80, 255, 0.26); --wash-2: rgba(255, 92, 138, 0.16); }
 
+[hidden] { display: none !important; }
 html, body { height: 100%; }
 body {
-  background: var(--paper); color: var(--ink);
-  font: 17px/1.5 var(--font-body);
+  background:
+    radial-gradient(60% 45% at 100% 0%, var(--wash-1), transparent 70%),
+    radial-gradient(55% 40% at 0% 100%, var(--wash-2), transparent 70%),
+    var(--bg);
+  background-attachment: fixed;
+  color: var(--ink);
+  font: 16.5px/1.5 var(--font-body);
   display: flex; flex-direction: column; overflow: hidden;
+  transition: background-color 300ms;
 }
-button, select, textarea { font: inherit; color: inherit; }
-button { cursor: pointer; }
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button, select, textarea, input { font: inherit; color: inherit; }
+button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+:focus-visible { outline: 2.5px solid var(--accent); outline-offset: 2px; }
+.grad { background: linear-gradient(135deg, var(--accent), var(--accent-2)); }
 
 /* Header */
 header {
-  flex: none; background: var(--surface); border-bottom: 1px solid var(--rule);
-  padding-block: 10px; padding-inline: 16px;
-  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+  flex: none; padding-block: 10px 6px; padding-inline: 16px;
+  display: flex; flex-direction: column; gap: 10px;
 }
-.brand { font: 700 20px/1.1 var(--font-display); letter-spacing: -0.01em; margin-right: auto; }
-.brand small { display: block; font: 400 12px/1.3 var(--font-body); color: var(--muted); letter-spacing: 0.02em; }
-.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 999px; padding: 2px; background: var(--paper); }
+.bar { display: flex; align-items: center; gap: 10px; max-width: 720px; width: 100%; margin: 0 auto; }
+.logo {
+  width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; flex: none;
+  color: var(--on-accent); font: 800 15px/1 var(--font-display); letter-spacing: -0.04em;
+  box-shadow: 0 6px 16px -6px var(--accent);
+}
+.brand { font: 700 18px/1.05 var(--font-display); letter-spacing: -0.03em; margin-right: auto; min-width: 0; }
+.brand small { display: block; font: 500 12px/1.3 var(--font-body); color: var(--muted); letter-spacing: 0; margin-top: 3px; }
+.icon-btn {
+  position: relative; flex: none; width: 40px; height: 40px; border-radius: 14px;
+  border: 1px solid var(--line); background: var(--surface); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  display: grid; place-items: center; box-shadow: var(--shadow);
+}
+.icon-btn svg { width: 20px; height: 20px; }
+.icon-btn[aria-expanded="true"], .icon-btn.on { background: var(--ink); color: var(--bg); border-color: transparent; }
+.icon-btn.armed { background: var(--pen); color: #FFFFFF; border-color: transparent; }
+.badge {
+  position: absolute; top: -5px; right: -5px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
+  font: 700 11px/18px var(--font-body); color: var(--on-accent); text-align: center; font-variant-numeric: tabular-nums;
+}
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.toast-label { font-size: 12px; font-weight: 600; color: var(--pen); }
+
+.seg {
+  flex: 1; min-width: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px;
+  border-radius: 16px; background: var(--surface); border: 1px solid var(--line);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: var(--shadow);
+}
 .seg button {
-  border: 0; background: transparent; border-radius: 999px; padding: 4px 12px;
-  font-weight: 600; font-size: 14px; color: var(--muted);
+  border: 0; background: transparent; border-radius: 12px; padding: 8px 6px;
+  font: 600 15px/1.2 var(--font-body); color: var(--muted); display: flex; align-items: center; justify-content: center; gap: 8px;
 }
-.seg button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
-.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-select {
-  border: 1px solid var(--rule); background: var(--paper); border-radius: 8px;
-  padding: 4px 6px; font-size: 14px; font-variant-numeric: tabular-nums;
+.seg button .code { font: 700 11px/1 var(--font-display); letter-spacing: 0.02em; padding: 4px 5px; border-radius: 6px; background: var(--line); }
+.seg button[aria-pressed="true"] { color: var(--on-accent); background: linear-gradient(135deg, var(--accent), var(--accent-2)); box-shadow: 0 6px 16px -8px var(--accent); }
+.seg button[aria-pressed="true"] .code { background: rgba(255, 255, 255, 0.25); }
+.level {
+  flex: none; border: 1px solid var(--line); background: var(--surface); border-radius: 14px; height: 48px;
+  padding: 0 10px; font: 700 14px/1 var(--font-display); box-shadow: var(--shadow);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
 }
-.ghost { border: 1px solid var(--rule); background: transparent; border-radius: 8px; padding: 4px 10px; font-size: 14px; }
-.ghost.armed { border-color: var(--pen); color: var(--pen); }
 
 /* Transcript */
 main { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
-.log { max-width: 680px; margin: 0 auto; padding-block: 16px 24px; padding-inline: 16px; display: flex; flex-direction: column; gap: 14px; }
+.log { max-width: 720px; margin: 0 auto; padding-block: 10px 28px; padding-inline: 16px; display: flex; flex-direction: column; gap: 16px; }
 
 .row { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .row.me { align-items: flex-end; }
-.row.tutor { align-items: flex-start; }
-.bubble {
-  max-width: 88%; min-width: 0; padding: 10px 14px; border-radius: 18px;
-  overflow-wrap: anywhere;
+.row.tutor { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 8px; align-items: start; }
+.stack { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; min-width: 0; }
+.avatar {
+  width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
+  color: var(--on-accent); font: 700 13px/1 var(--font-display); box-shadow: 0 4px 12px -4px var(--accent);
 }
-.me .bubble { background: var(--accent); color: var(--on-accent); border-bottom-right-radius: 6px; }
-.me .bubble.meta { background: transparent; color: var(--muted); border: 1px dashed var(--rule); font-style: italic; }
-.tutor .bubble { background: var(--surface); border: 1px solid var(--rule); border-bottom-left-radius: 6px; }
+.who { font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: 0.02em; }
+.bubble { max-width: 90%; min-width: 0; padding: 11px 15px; border-radius: 22px; overflow-wrap: anywhere; }
+.me .bubble {
+  color: var(--on-accent); border-bottom-right-radius: 8px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2)); box-shadow: 0 10px 22px -12px var(--accent);
+}
+.me .bubble.meta { background: transparent; color: var(--muted); border: 1.5px dashed var(--line); box-shadow: none; font-style: italic; }
+.tutor .bubble {
+  background: var(--surface); border: 1px solid var(--line); border-top-left-radius: 8px; box-shadow: var(--shadow);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+}
 .bubble p { margin: 0; }
 .bubble p + p { margin-top: 8px; }
-.thinking { color: var(--muted); font-style: italic; }
+.bubble strong { font-weight: 700; }
+.thinking { color: var(--muted); display: inline-flex; gap: 4px; align-items: center; min-height: 1.5em; }
+.thinking i { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); opacity: 0.35; }
+@media (prefers-reduced-motion: no-preference) {
+  .thinking i { animation: blink 1.1s infinite ease-in-out; }
+  .thinking i:nth-child(2) { animation-delay: 0.15s; }
+  .thinking i:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes blink { 40% { opacity: 1; transform: translateY(-3px); } }
+}
 
-/* Red-pen correction, attached under the learner's message */
+/* Red-pen correction sticker, attached under the learner's message */
 .pen {
-  max-width: 88%; min-width: 0; align-self: flex-end;
-  background: var(--pen-wash); border-radius: 12px; padding: 8px 12px 10px;
-  border: 1px solid color-mix(in srgb, var(--pen) 25%, transparent);
+  position: relative; max-width: 90%; min-width: 0; align-self: flex-end; margin-top: 10px;
+  background: var(--solid); border-radius: 18px; padding: 16px 16px 12px;
+  border: 1.5px solid color-mix(in srgb, var(--pen) 35%, transparent);
+  box-shadow: 0 12px 26px -16px var(--pen);
 }
-.pen .fixed { font: 400 20px/1.35 var(--font-pen); color: var(--pen); overflow-wrap: anywhere; }
-.pen ul { margin: 6px 0 0; padding-left: 18px; font-size: 15px; color: var(--ink); }
-.pen li + li { margin-top: 3px; }
+.pen::before {
+  content: attr(data-label); position: absolute; top: -11px; left: 14px; transform: rotate(-3deg);
+  background: var(--pen); color: #FFFFFF; font: 700 11px/1 var(--font-display); letter-spacing: 0.04em;
+  padding: 5px 9px; border-radius: 8px; text-transform: uppercase;
+}
+.pen .fixed { font: 700 21px/1.3 var(--font-pen); color: var(--pen); overflow-wrap: anywhere; }
+.pen ul { margin: 6px 0 0; padding-left: 18px; font-size: 14.5px; color: var(--ink); }
+.pen li + li { margin-top: 4px; }
 .pen li.tip { list-style: "→ "; color: var(--muted); }
-.pen .more { margin-top: 8px; border: 0; background: transparent; padding: 0; color: var(--pen); font-weight: 600; font-size: 14px; text-decoration: underline; text-underline-offset: 3px; }
+.pen .more {
+  margin-top: 10px; border: 0; background: var(--pen-wash); color: var(--pen); padding: 6px 12px; border-radius: 999px;
+  font-weight: 700; font-size: 13px;
+}
 .stamp {
-  align-self: flex-end; font: 700 17px/1 var(--font-pen); color: var(--ok); background: var(--ok-wash);
-  padding: 5px 10px 3px; border-radius: 999px; transform: rotate(-3deg);
+  align-self: flex-end; font: 700 18px/1 var(--font-pen); color: var(--ok); background: var(--ok-wash);
+  border: 1.5px solid color-mix(in srgb, var(--ok) 40%, transparent);
+  padding: 7px 12px 5px; border-radius: 999px; transform: rotate(-4deg);
 }
 
-.vocab { max-width: 88%; font-size: 14px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px; }
-.vocab span { border: 1px solid var(--rule); border-radius: 6px; padding: 1px 8px; background: var(--surface); }
-.vocab b { color: var(--ink); font-weight: 600; }
-.tools { display: flex; gap: 12px; }
-.link { border: 0; background: transparent; padding: 0; font-size: 13px; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
-.translation { max-width: 88%; font-size: 15px; color: var(--muted); font-style: italic; border-left: 2px solid var(--rule); padding-left: 10px; }
-.error { align-self: center; font-size: 14px; color: var(--pen); text-align: center; max-width: 34ch; }
+.vocab { max-width: 90%; font-size: 13.5px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px; }
+.vocab span { border-radius: 999px; padding: 3px 10px; background: var(--surface); border: 1px solid var(--line); }
+.vocab b { color: var(--accent); font-weight: 700; }
+.tools { display: flex; gap: 6px; flex-wrap: wrap; }
+.link {
+  border: 1px solid var(--line); background: var(--surface); padding: 4px 11px; border-radius: 999px;
+  font-size: 12.5px; font-weight: 600; color: var(--muted);
+}
+.link:hover { color: var(--ink); }
+.translation { max-width: 90%; font-size: 14.5px; color: var(--muted); font-style: italic; border-left: 3px solid var(--accent-2); padding-left: 10px; }
+.error { align-self: center; font-size: 14px; font-weight: 600; color: var(--pen); text-align: center; max-width: 34ch; background: var(--pen-wash); padding: 8px 14px; border-radius: 14px; }
+.scene {
+  align-self: center; font: 700 11px/1 var(--font-display); text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--accent); background: var(--surface); border: 1px solid var(--line); padding: 7px 12px; border-radius: 999px;
+}
 
 /* Welcome */
-.welcome { background: var(--surface); border: 1px solid var(--rule); border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 12px; }
-.welcome h1 { margin: 0; font: 700 24px/1.15 var(--font-display); text-wrap: balance; letter-spacing: -0.01em; }
-.welcome p { margin: 0; color: var(--muted); }
-.example { border-top: 1px dashed var(--rule); padding-top: 12px; display: flex; flex-direction: column; gap: 6px; }
-.eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); font-weight: 600; }
+.welcome { display: flex; flex-direction: column; gap: 18px; padding-top: 6px; }
+.hero h1 {
+  margin: 0; font: 800 clamp(30px, 9vw, 46px)/1.02 var(--font-display); letter-spacing: -0.045em; text-wrap: balance;
+}
+.hero h1 em {
+  font-style: normal; background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.hero p { margin: 10px 0 0; color: var(--muted); font-size: 16px; max-width: 46ch; }
+.card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 24px; padding: 16px;
+  box-shadow: var(--shadow); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  display: flex; flex-direction: column; gap: 10px; min-width: 0;
+}
+.eyebrow { font: 700 11px/1 var(--font-display); text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
+.chips { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 8px; }
+.chip {
+  display: flex; align-items: center; gap: 8px; text-align: left;
+  border: 1.5px solid var(--line); background: var(--solid); border-radius: 16px; padding: 10px 12px;
+  font-size: 14px; font-weight: 600; line-height: 1.2;
+}
+.chip .ico { font-size: 20px; line-height: 1; }
+.chip[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
 .primary {
-  align-self: flex-start; border: 0; border-radius: 999px; padding: 10px 20px;
-  background: var(--accent); color: var(--on-accent); font-weight: 600;
+  border: 0; border-radius: 18px; padding: 16px 22px; width: 100%;
+  color: var(--on-accent); font: 700 17px/1 var(--font-display); letter-spacing: -0.02em;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2)); box-shadow: 0 14px 30px -14px var(--accent);
 }
 .primary:disabled { opacity: 0.5; cursor: default; }
-
-.chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.chip { border: 1px solid var(--rule); background: var(--paper); border-radius: 999px; padding: 4px 12px; font-size: 14px; }
-.chip[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); font-weight: 600; }
-.hint { font-size: 14px; }
-.scene { align-self: center; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
-
-/* Voice settings */
-.panel { flex: none; background: var(--surface); border-bottom: 1px solid var(--rule); padding-block: 12px; padding-inline: 16px; max-height: 55vh; overflow-y: auto; }
-.panel-inner { max-width: 680px; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; }
-.panel-row { display: flex; align-items: center; gap: 10px; min-width: 0; font-size: 15px; }
-.panel-row select { flex: 1; min-width: 0; font-size: 15px; padding: 6px; }
-.panel-row input[type="range"] { flex: 1; min-width: 0; accent-color: var(--accent); }
-.panel-row input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--accent); }
-.panel .hint { margin: 0; color: var(--muted); }
-
-/* Notebook */
-.notebook { display: flex; flex-direction: column; gap: 12px; }
-.nb-head { display: flex; flex-direction: column; gap: 10px; }
-.nb-head h1 { margin: 0; font: 700 24px/1.15 var(--font-display); letter-spacing: -0.01em; }
-.nb-head p { margin: 0; color: var(--muted); }
-.nb-card { background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; padding: 10px 14px 12px; min-width: 0; }
-.nb-meta { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
-.nb-was { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--pen); overflow-wrap: anywhere; margin-top: 4px; }
-.nb-card .fixed { font: 400 20px/1.35 var(--font-pen); color: var(--pen); overflow-wrap: anywhere; }
-.nb-card ul { margin: 6px 0 0; padding-left: 18px; font-size: 15px; }
-.nb-card li.tip { list-style: "→ "; color: var(--muted); }
+.hint { font-size: 13.5px; color: var(--muted); margin: 0; }
 
 /* Composer */
-footer {
-  flex: none; background: var(--surface); border-top: 1px solid var(--rule);
-  padding-block: 8px calc(10px + env(safe-area-inset-bottom, 0px)); padding-inline: 16px;
+footer { flex: none; padding-block: 6px calc(12px + env(safe-area-inset-bottom, 0px)); padding-inline: 12px; }
+.composer {
+  max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 8px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 26px; padding: 8px;
+  box-shadow: var(--shadow); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
 }
-.composer { max-width: 680px; margin: 0 auto; display: flex; flex-direction: column; gap: 6px; }
-.keys { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.keys { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-inline: 2px; }
+.keys::-webkit-scrollbar { display: none; }
 .keys button {
-  flex: none; min-width: 34px; border: 1px solid var(--rule); background: var(--paper);
-  border-radius: 8px; padding: 2px 8px; font-size: 16px;
+  flex: none; min-width: 34px; height: 32px; border: 0; background: var(--line); border-radius: 10px; padding: 0 8px; font-size: 16px; font-weight: 600;
 }
 .inputrow { display: flex; gap: 8px; align-items: flex-end; }
 textarea {
-  flex: 1; min-width: 0; resize: none; max-height: 140px;
-  border: 1px solid var(--rule); background: var(--paper); border-radius: 18px;
-  padding: 9px 14px; font-size: 17px; line-height: 1.35;
+  flex: 1; min-width: 0; resize: none; max-height: 140px; border: 0; background: transparent;
+  padding: 10px 8px 10px 10px; font-size: 17px; line-height: 1.35;
 }
+textarea:focus-visible { outline: none; }
 .send {
-  flex: none; width: 44px; height: 44px; border-radius: 50%; border: 0;
-  background: var(--accent); color: var(--on-accent); display: grid; place-items: center;
+  flex: none; width: 46px; height: 46px; border-radius: 16px; border: 0; color: var(--on-accent); display: grid; place-items: center;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2)); box-shadow: 0 8px 18px -8px var(--accent);
 }
-.send.stop { background: var(--pen); color: var(--surface); }
-.send:disabled { opacity: 0.4; cursor: default; }
+.send.stop { background: var(--ink); color: var(--bg); box-shadow: none; }
+.send:disabled { opacity: 0.35; cursor: default; box-shadow: none; }
 .send svg { width: 20px; height: 20px; }
 
+/* Voice settings */
+.panel { flex: none; padding-block: 0 8px; padding-inline: 16px; max-height: 55vh; overflow-y: auto; }
+.panel-inner {
+  max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 16px; box-shadow: var(--shadow);
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+}
+.panel-row { display: flex; align-items: center; gap: 10px; min-width: 0; font-size: 15px; }
+.panel-row select { flex: 1; min-width: 0; font-size: 15px; padding: 8px; border-radius: 12px; border: 1px solid var(--line); background: var(--solid); }
+.panel-row input[type="range"] { flex: 1; min-width: 0; accent-color: var(--accent); }
+.panel-row input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--accent); }
+.ghost { border: 1px solid var(--line); background: var(--solid); border-radius: 12px; padding: 8px 12px; font-size: 14px; font-weight: 600; }
+
+/* Notebook */
+.notebook { display: flex; flex-direction: column; gap: 14px; }
+.nb-head { display: flex; flex-direction: column; gap: 10px; }
+.nb-head h1 { margin: 0; font: 800 30px/1.05 var(--font-display); letter-spacing: -0.04em; text-wrap: balance; }
+.nb-head p { margin: 0; color: var(--muted); }
+.nb-card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 12px 16px 14px; min-width: 0;
+  box-shadow: var(--shadow); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+}
+.nb-meta { display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 600; color: var(--muted); }
+.nb-was { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--pen); text-decoration-thickness: 2px; overflow-wrap: anywhere; margin-top: 6px; }
+.nb-card .fixed { font: 700 21px/1.3 var(--font-pen); color: var(--pen); overflow-wrap: anywhere; }
+.nb-card ul { margin: 6px 0 0; padding-left: 18px; font-size: 14.5px; }
+.nb-card li.tip { list-style: "→ "; color: var(--muted); }
 </style>
 
 <header>
-  <div class="brand">Tandem Tutor<small>Chat, get corrected, keep going</small></div>
-  <div class="controls">
+  <div class="bar">
+    <div class="logo grad" aria-hidden="true">Tt</div>
+    <div class="brand">Tandem<small>Talk. Get corrected. Keep going.</small></div>
+    <button id="voice" class="icon-btn" type="button" aria-expanded="false" aria-controls="voice-panel" aria-label="Voice settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>
+    </button>
+    <button id="nb" class="icon-btn" type="button" aria-label="Mistake notebook">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V4z"/><path d="M5 17a3 3 0 0 1 3-3h11M9 8h6"/></svg>
+      <span class="badge grad" id="nb-count" hidden></span>
+    </button>
+    <button id="reset" class="icon-btn" type="button" aria-label="New chat">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+    </button>
+  </div>
+  <div class="bar">
     <div class="seg" role="group" aria-label="Language">
-      <button id="lang-de" data-lang="de" aria-pressed="true">Deutsch</button>
-      <button id="lang-fr" data-lang="fr" aria-pressed="false">Français</button>
+      <button id="lang-de" data-lang="de" aria-pressed="true"><span class="code">DE</span>Deutsch</button>
+      <button id="lang-fr" data-lang="fr" aria-pressed="false"><span class="code">FR</span>Français</button>
     </div>
-    <select id="level" aria-label="Your level (CEFR)">
+    <select id="level" class="level" aria-label="Your level (CEFR)">
       <option>A1</option><option selected>A2</option><option>B1</option><option>B2</option><option>C1</option><option>C2</option>
     </select>
-    <button id="nb" class="ghost" type="button">Notebook</button>
-    <button id="voice" class="ghost" type="button" aria-expanded="false" aria-controls="voice-panel">Voice</button>
-    <button id="reset" class="ghost" type="button">New chat</button>
   </div>
+  <div class="bar toast-label" id="reset-note" hidden>Tap + again to clear this chat</div>
 </header>
 
 <section id="voice-panel" class="panel" hidden></section>
@@ -212,6 +326,7 @@ const LANGS = {
     name: "German", native: "Deutsch",
     greet: "Hallo! Ich möchte Deutsch üben.",
     placeholder: "Schreib etwas auf Deutsch…",
+    tutor: "Lena", fixLabel: "Korrektur", heroA: "Sprich mit mir. ", heroB: "Ich korrigiere dich.",
     perfect: "Perfekt!",
     keys: ["ä", "ö", "ü", "ß", "Ä", "Ö", "Ü", "„", "“"],
     example: {
@@ -225,6 +340,7 @@ const LANGS = {
     name: "French", native: "Français",
     greet: "Bonjour ! Je voudrais pratiquer le français.",
     placeholder: "Écris quelque chose en français…",
+    tutor: "Camille", fixLabel: "Correction", heroA: "Parle avec moi. ", heroB: "Je te corrige.",
     perfect: "Parfait !",
     keys: ["é", "è", "ê", "à", "â", "ç", "ô", "î", "ù", "û", "œ", "ë", "«", "»"],
     example: {
@@ -241,14 +357,14 @@ const MAX_NOTEBOOK = 200;
 
 // Role-play scenes. `brief` goes to Claude; `label` is what the learner sees.
 const SCENES = [
-  { id: "free", label: "Free chat", brief: "" },
-  { id: "cafe", label: "Ordering at a café", brief: "Role-play: you are a friendly server at a café and the learner is a customer. Stay in character: take their order, answer questions about the menu, mention prices, bring the bill." },
-  { id: "bakery", label: "At the bakery", brief: "Role-play: you work at a bakery and the learner is buying bread and pastries. Stay in character: suggest items, give prices, count change." },
-  { id: "directions", label: "Asking for directions", brief: "Role-play: you are a local on the street and the learner is a lost tourist. Stay in character and give directions with real landmarks." },
-  { id: "hotel", label: "Hotel check-in", brief: "Role-play: you are a hotel receptionist and the learner is checking in. Stay in character: reservation, passport, breakfast times, wifi, a small problem with the room." },
-  { id: "doctor", label: "At the doctor's", brief: "Role-play: you are a doctor and the learner is a patient describing symptoms. Stay in character, ask follow-up questions and give simple advice." },
-  { id: "interview", label: "Job interview", brief: "Role-play: you are interviewing the learner for a job they choose. Stay in character and ask typical interview questions one at a time." },
-  { id: "smalltalk", label: "Meeting a new friend", brief: "Role-play: you have just met the learner at a party. Make small talk: where they're from, work, hobbies, plans." }
+  { id: "free", icon: "💬", label: "Free chat", brief: "" },
+  { id: "cafe", icon: "☕", label: "Ordering at a café", brief: "Role-play: you are a friendly server at a café and the learner is a customer. Stay in character: take their order, answer questions about the menu, mention prices, bring the bill." },
+  { id: "bakery", icon: "🥐", label: "At the bakery", brief: "Role-play: you work at a bakery and the learner is buying bread and pastries. Stay in character: suggest items, give prices, count change." },
+  { id: "directions", icon: "🗺️", label: "Asking for directions", brief: "Role-play: you are a local on the street and the learner is a lost tourist. Stay in character and give directions with real landmarks." },
+  { id: "hotel", icon: "🛎️", label: "Hotel check-in", brief: "Role-play: you are a hotel receptionist and the learner is checking in. Stay in character: reservation, passport, breakfast times, wifi, a small problem with the room." },
+  { id: "doctor", icon: "🩺", label: "At the doctor's", brief: "Role-play: you are a doctor and the learner is a patient describing symptoms. Stay in character, ask follow-up questions and give simple advice." },
+  { id: "interview", icon: "💼", label: "Job interview", brief: "Role-play: you are interviewing the learner for a job they choose. Stay in character and ask typical interview questions one at a time." },
+  { id: "smalltalk", icon: "🥂", label: "Meeting a new friend", brief: "Role-play: you have just met the learner at a party. Make small talk: where they're from, work, hobbies, plans." }
 ];
 
 function reviewBrief(mistakes) {
@@ -257,7 +373,7 @@ function reviewBrief(mistakes) {
 }
 
 function rules(L, level, scene) {
-  return `You are a warm, patient ${L.name} conversation partner and tutor inside a chat app. The learner is an English speaker practising ${L.name} at roughly CEFR level ${level}. The app parses your reply, so follow this format exactly.
+  return `You are a warm, patient ${L.name} conversation partner and tutor inside a chat app. The learner is an English speaker practising ${L.name} at roughly CEFR level ${level}. Your name is ${L.tutor}. The app parses your reply, so follow this format exactly.
 ${scene ? "\n" + scene + "\nWhen a role-play is set, your first reply opens the scene in character instead of a general greeting.\n" : ""}
 
 For every learner message, start with a <fix> block:
@@ -282,7 +398,7 @@ word — English meaning
 </vocab>
 
 Special cases:
-- Your very first reply (answering the learner's greeting) has no <fix> block: just greet them, introduce yourself briefly with a first name, and ask an easy question to get started.
+- Your very first reply (answering the learner's greeting) has no <fix> block: just greet them, introduce yourself briefly by your name, and ask an easy question to get started.
 - If the learner sends exactly "/explain", skip the <fix> block. In English, explain the grammar behind your most recent correction more fully, with two or three short ${L.name} example sentences, then invite them to continue in ${L.name}.
 - Stay in ${L.name} for the conversation itself unless the learner is clearly lost and asks for help in English.`;
 }
@@ -362,15 +478,16 @@ function correctionNode(fix, isLatest) {
   const L = LANGS[lang];
   if (fix.ok) return el("div", "stamp", "✓ " + L.perfect);
   const box = el("div", "pen");
+  box.dataset.label = L.fixLabel;
   if (fix.fixed) box.append(el("div", "fixed", fix.fixed));
   if (fix.notes.length) {
     const ul = el("ul");
     fix.notes.forEach(n => ul.append(el("li", n.tip ? "tip" : "", n.text)));
     box.append(ul);
   }
-  if (!fix.fixed && !fix.notes.length) box.append(el("div", "thinking", "Checking…"));
+  if (!fix.fixed && !fix.notes.length) box.append(dots());
   if (isLatest && !busy && fix.fixed && sampleState === "ready") {
-    const more = el("button", "more", "Explain this in more detail");
+    const more = el("button", "more", "Explain this rule");
     more.type = "button";
     more.onclick = () => send("/explain");
     box.append(more);
@@ -378,22 +495,43 @@ function correctionNode(fix, isLatest) {
   return box;
 }
 
-function tutorNodes(text, key, streaming) {
-  const out = [];
-  const { vocab, body } = parse(text);
+function dots() {
+  const d = el("span", "thinking");
+  d.setAttribute("aria-label", "Thinking");
+  d.append(el("i"), el("i"), el("i"));
+  return d;
+}
+
+function avatar() {
+  const a = el("div", "avatar grad", LANGS[lang].tutor[0]);
+  a.setAttribute("aria-hidden", "true");
+  return a;
+}
+
+function tutorRow(stackChildren, showName) {
   const row = el("div", "row tutor");
+  const stack = el("div", "stack");
+  if (showName) stack.append(el("div", "who", LANGS[lang].tutor));
+  stack.append(...stackChildren);
+  row.append(avatar(), stack);
+  return row;
+}
+
+function tutorNodes(text, key, streaming, showName) {
+  const { vocab, body } = parse(text);
+  const parts = [];
   const bubble = el("div", "bubble");
-  if (body) paragraphs(bubble, body); else bubble.append(el("span", "thinking", streaming ? "Thinking…" : ""));
-  row.append(bubble);
+  if (body) paragraphs(bubble, body); else bubble.append(dots());
+  parts.push(bubble);
   if (vocab.length) {
     const v = el("div", "vocab");
     vocab.forEach(item => {
       const [w, ...m] = item.split(/\s+[—–-]\s+/);
-      const s = el("span"); const b = el("b", null, w); s.append(b);
+      const s = el("span"); s.append(el("b", null, w));
       if (m.length) s.append(" " + m.join(" – "));
       v.append(s);
     });
-    row.append(v);
+    parts.push(v);
   }
   if (!streaming && body) {
     const tr = translations[key];
@@ -405,37 +543,44 @@ function tutorNodes(text, key, streaming) {
       tools.append(say);
     }
     if (!(tr && tr.text) && sampleState === "ready") {
-      const b = el("button", "link", tr && tr.loading ? "Translating…" : "Show in English");
+      const b = el("button", "link", tr && tr.loading ? "Translating…" : "EN  Translate");
       b.type = "button";
       b.disabled = !!(tr && tr.loading);
       b.onclick = () => translate(key, body);
       tools.append(b);
     }
-    if (tools.childElementCount) row.append(tools);
-    if (tr && tr.text) row.append(el("div", "translation", tr.text));
+    if (tools.childElementCount) parts.push(tools);
+    if (tr && tr.text) parts.push(el("div", "translation", tr.text));
   }
-  out.push(row);
-  return out;
+  return [tutorRow(parts, showName)];
 }
 
 function welcomeNode() {
   const L = LANGS[lang], ex = L.example;
   const w = el("section", "welcome");
-  w.append(el("h1", null, `Practise ${L.name} by just talking`));
-  w.append(el("p", null, "Write to your tutor about anything. Each time, you get your sentence back corrected in red pen, with a short note on why, and the conversation keeps going."));
-  const exBox = el("div", "example");
+
+  const hero = el("div", "hero");
+  const h1 = el("h1");
+  h1.append(L.heroA, el("em", null, L.heroB));
+  hero.append(h1);
+  hero.append(el("p", null, `Chat with ${L.tutor}, your ${L.name} tutor. Every sentence you write comes back corrected in red pen, with a one-line reason, and the conversation keeps going.`));
+  w.append(hero);
+
+  const exBox = el("div", "card");
   exBox.append(el("div", "eyebrow", "Example"));
-  const r1 = el("div", "row me"); r1.append(el("div", "bubble", ex.me)); exBox.append(r1);
-  exBox.append(correctionNode({ ok: false, fixed: ex.fixed, notes: ex.notes.map(t => ({ text: t })) }, false));
-  const r2 = el("div", "row tutor"); r2.append(el("div", "bubble", ex.reply)); exBox.append(r2);
+  const r1 = el("div", "row me"); r1.append(el("div", "bubble", ex.me));
+  r1.append(correctionNode({ ok: false, fixed: ex.fixed, notes: ex.notes.map(t => ({ text: t })) }, false));
+  exBox.append(r1);
+  exBox.append(tutorRow([el("div", "bubble", ex.reply)], true));
   w.append(exBox);
 
-  const pick = el("div", "example");
-  pick.append(el("div", "eyebrow", "Choose a scene"));
+  const pick = el("div", "card");
+  pick.append(el("div", "eyebrow", "Pick a scene"));
   const chips = el("div", "chips");
   const chosen = store.get("tt:pick:" + lang, "free");
   SCENES.forEach(s => {
-    const c = el("button", "chip", s.label);
+    const c = el("button", "chip");
+    c.append(el("span", "ico", s.icon), el("span", null, s.label));
     c.type = "button";
     c.setAttribute("aria-pressed", String(s.id === chosen));
     c.onclick = () => { store.set("tt:pick:" + lang, s.id); render(); };
@@ -445,14 +590,14 @@ function welcomeNode() {
   w.append(pick);
 
   const scene = SCENES.find(s => s.id === chosen) || SCENES[0];
-  const start = el("button", "primary", sampleState === "absent" ? "Unavailable here" : `Start in ${L.native}`);
+  const start = el("button", "primary", sampleState === "absent" ? "Unavailable here" : `Start talking with ${L.tutor} →`);
   start.type = "button";
   start.disabled = busy || sampleState !== "ready";
   start.onclick = () => startChat({ label: scene.label, brief: scene.brief });
   w.append(start);
-  if (sampleState === "absent") w.append(el("p", null, "This page talks to Claude through your Claude account. Open it in the Claude app or at claude.ai while signed in."));
-  if (sampleState === "loading") w.append(el("p", null, "Connecting to Claude…"));
-  w.append(el("p", "hint", "To practise speaking, tap the microphone on your phone's keyboard and dictate your answer. Tap 🔊 Listen under any reply to hear it read aloud."));
+  if (sampleState === "absent") w.append(el("p", "hint", "This page talks to Claude through your Claude account. Open it in the Claude app or at claude.ai while signed in."));
+  if (sampleState === "loading") w.append(el("p", "hint", "Connecting to Claude…"));
+  w.append(el("p", "hint", "🎤 To speak, tap the microphone on your phone's keyboard. 🔊 Tap Listen under any reply to hear it aloud."));
   return w;
 }
 
@@ -469,6 +614,10 @@ function notebookNode() {
   const mine = notebook.filter(m => m.lang === lang);
   const wrap = el("section", "notebook");
   const head = el("div", "nb-head");
+  const back = el("button", "link", "← Back to chat");
+  back.type = "button"; back.style.alignSelf = "flex-start";
+  back.onclick = () => { view = "chat"; render(); scroller.scrollTop = scroller.scrollHeight; };
+  head.append(back);
   head.append(el("h1", null, `My ${L.name} mistakes`));
   head.append(el("p", null, mine.length
     ? `${mine.length} saved. Every correction from your chats lands here automatically.`
@@ -637,21 +786,25 @@ function render() {
       }
       log.append(row);
     } else {
-      log.append(...tutorNodes(t.content, lang + ":" + i, !!t.streaming));
+      log.append(...tutorNodes(t.content, lang + ":" + i, !!t.streaming, i <= 1));
     }
   });
 
   if (errorMsg) log.append(el("div", "error", errorMsg));
-  if (nearBottom || pending !== null) scroller.scrollTop = scroller.scrollHeight;
+  if (all.length && (nearBottom || pending !== null)) scroller.scrollTop = scroller.scrollHeight;
   renderControls();
 }
 
 function renderControls() {
   const L = LANGS[lang];
+  document.documentElement.dataset.lang = lang;
   document.querySelectorAll(".seg button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.lang === lang)));
   const count = notebook.filter(m => m.lang === lang).length;
-  $("nb").textContent = view === "notebook" ? "Back to chat" : `Notebook${count ? " · " + count : ""}`;
-  $("composer").hidden = view === "notebook";
+  $("nb").classList.toggle("on", view === "notebook");
+  $("nb").setAttribute("aria-label", view === "notebook" ? "Back to chat" : `Mistake notebook, ${count} saved`);
+  $("nb-count").hidden = !count;
+  $("nb-count").textContent = count > 99 ? "99+" : String(count);
+  $("composer").hidden = view === "notebook" || (turns[lang].length === 0 && pending === null);
   if ($("voice-panel").dataset.lang !== lang) { $("voice-panel").dataset.lang = lang; renderVoicePanel(); }
   input.placeholder = L.placeholder;
   const keys = $("keys");
@@ -787,12 +940,12 @@ $("reset").addEventListener("click", (e) => {
   const btn = e.currentTarget;
   if (busy) return;
   if (!btn.classList.contains("armed")) {
-    btn.classList.add("armed"); btn.textContent = "Tap again to clear";
-    armTimer = setTimeout(() => { btn.classList.remove("armed"); btn.textContent = "New chat"; }, 3000);
+    btn.classList.add("armed"); $("reset-note").hidden = false;
+    armTimer = setTimeout(() => { btn.classList.remove("armed"); $("reset-note").hidden = true; }, 3000);
     return;
   }
   clearTimeout(armTimer);
-  btn.classList.remove("armed"); btn.textContent = "New chat";
+  btn.classList.remove("armed"); $("reset-note").hidden = true;
   turns[lang] = []; store.set("tt:turns:" + lang, []); errorMsg = ""; view = "chat";
   Object.keys(translations).forEach(k => { if (k.startsWith(lang + ":")) delete translations[k]; });
   render();
