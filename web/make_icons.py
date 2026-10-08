@@ -1,5 +1,5 @@
-"""Draw the Tandem app icons: an amber German "ö" and a cobalt French "ô" whose rings
-interlock (two languages, two wheels of a tandem), on a deep charcoal background.
+"""Draw the Tandem app icons: a white outlined speech bubble with a dot,
+on a soft peach-to-rose gradient.
 
 Run from the repository root:  python web/make_icons.py
 Writes PNGs to docs/icons/. Needs Pillow (pip install pillow).
@@ -7,99 +7,47 @@ Writes PNGs to docs/icons/. Needs Pillow (pip install pillow).
 
 from pathlib import Path
 
-from PIL import Image, ImageChops, ImageDraw, ImageFilter
+from PIL import Image, ImageChops, ImageDraw
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "docs" / "icons"
 
-S = 2048                                   # draw large, scale down for smooth edges
-BG_CENTER, BG_EDGE = (40, 42, 48), (10, 11, 13)
-AMBER = ((255, 196, 102), (236, 120, 48))   # gradient: top-left -> bottom-right
-COBALT = ((150, 172, 255), (78, 98, 240))
-R, W, GAP = 320, 96, 440                  # ring radius (mid-stroke), thickness, centre distance
-CY = S / 2 + 120                           # rings sit a little low to leave room for the accents
-
-
-def gradient(c0, c1):
-    """Diagonal gradient image from c0 (top-left) to c1 (bottom-right)."""
-    g = Image.linear_gradient("L").rotate(45, expand=True).resize((S, S))
-    return Image.composite(Image.new("RGB", (S, S), c1), Image.new("RGB", (S, S), c0), g)
-
-
-def ring_mask(cx, cy, grow=0):
-    m = Image.new("L", (S, S), 0)
-    d = ImageDraw.Draw(m)
-    o, i = R + W / 2 + grow, R - W / 2 - grow
-    d.ellipse((cx - o, cy - o, cx + o, cy + o), fill=255)
-    d.ellipse((cx - i, cy - i, cx + i, cy + i), fill=0)
-    return m
+S = 2048                          # draw large, scale down for smooth edges
+PEACH, ROSE = (255, 196, 140), (255, 120, 150)
+WHITE = (255, 255, 255)
 
 
 def background():
-    bg = Image.new("RGB", (S, S), BG_EDGE)
-    glow = Image.new("L", (S, S), 0)
-    ImageDraw.Draw(glow).ellipse((S * 0.08, S * 0.02, S * 0.92, S * 0.86), fill=255)
-    glow = glow.filter(ImageFilter.GaussianBlur(S * 0.12))
-    return Image.composite(Image.new("RGB", (S, S), BG_CENTER), bg, glow)
+    """Diagonal gradient: peach at the top right, rose at the bottom left."""
+    g = Image.linear_gradient("L").resize((S * 2, S * 2)).rotate(-35).crop((S // 2, S // 2, S // 2 + S, S // 2 + S))
+    return Image.composite(Image.new("RGB", (S, S), ROSE), Image.new("RGB", (S, S), PEACH), g)
 
 
-def draw_art():
-    """The letters on a transparent layer."""
-    lx, rx = S / 2 - GAP / 2, S / 2 + GAP / 2
-    art = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-    amber_fill, cobalt_fill = gradient(*AMBER).convert("RGBA"), gradient(*COBALT).convert("RGBA")
+def bubble_mask(box, tail=True):
+    m = Image.new("L", (S, S), 0)
+    d = ImageDraw.Draw(m)
+    x0, y0, x1, y1 = box
+    h = y1 - y0
+    d.rounded_rectangle(box, radius=int(h * 0.42), fill=255)
+    if tail:
+        d.polygon([(x0 + h * 0.18, y1 - h * 0.30), (x0 + h * 0.58, y1 - 2), (x0 + h * 0.02, y1 + h * 0.22)], fill=255)
+    return m
 
-    amber_m, cobalt_m = ring_mask(lx, CY), ring_mask(rx, CY)
-    art.paste(amber_fill, (0, 0), amber_m)
-    art.paste(cobalt_fill, (0, 0), cobalt_m)            # cobalt over amber at the bottom crossing
 
-    # Amber over cobalt at the top crossing (the only crossing above the centre line),
-    # cut with a thin gap so the over/under reads cleanly.
-    top = Image.new("L", (S, S), 0)
-    ImageDraw.Draw(top).rectangle((0, 0, S, CY), fill=255)
-    gap = ImageChops.multiply(ring_mask(lx, CY, grow=16), top)
-    art.paste((0, 0, 0, 0), (0, 0), gap)
-    art.paste(amber_fill, (0, 0), ImageChops.multiply(amber_m, top))
-    art.paste(cobalt_fill, (0, 0), ImageChops.multiply(ImageChops.subtract(cobalt_m, ring_mask(lx, CY, grow=16)), top))
-
-    # Accents: umlaut dots over the amber ring, a circumflex over the cobalt one
-    accents = Image.new("L", (S, S), 0)
-    d = ImageDraw.Draw(accents)
-    ring_top = CY - R - W / 2
-    dot = W * 0.58
-    for dx in (-105, 105):
-        x, y = lx + dx, ring_top - 120
-        d.ellipse((x - dot, y - dot, x + dot, y + dot), fill=255)
-    t = int(W * 0.8)
-    apex, left_end, right_end = (rx + 10, ring_top - 205), (rx - 100, ring_top - 95), (rx + 120, ring_top - 95)
-    d.line([left_end, apex, right_end], fill=255, width=t, joint="curve")
-    for x, y in (left_end, apex, right_end):
-        d.ellipse((x - t / 2, y - t / 2, x + t / 2, y + t / 2), fill=255)
-    amber_acc = Image.new("L", (S, S), 0)
-    ImageDraw.Draw(amber_acc).rectangle((0, 0, S / 2, S), fill=255)
-    art.paste(amber_fill, (0, 0), ImageChops.multiply(accents, amber_acc))
-    art.paste(cobalt_fill, (0, 0), ImageChops.multiply(accents, ImageChops.invert(amber_acc)))
-    return art
+def mark(scale=1.0):
+    """The white bubble outline and dot, centred; scale < 1 shrinks it (for Android 'maskable' icons)."""
+    k = S / 1024 * scale
+    off = S / 2 * (1 - scale)
+    box = lambda x0, y0, x1, y1: (off + x0 * k, off + y0 * k, off + x1 * k, off + y1 * k)
+    outline = ImageChops.subtract(bubble_mask(box(232, 300, 792, 700)), bubble_mask(box(286, 354, 738, 646), tail=False))
+    ImageDraw.Draw(outline).ellipse(box(462, 450, 562, 550), fill=255)
+    return outline
 
 
 def draw_icon(scale=1.0):
-    """scale < 1 shrinks the letters toward the centre (for Android 'maskable' icons)."""
-    art = draw_art()
-    # soft shadow lifts the letters off the background
-    shadow = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-    shadow.putalpha(art.getchannel("A").filter(ImageFilter.GaussianBlur(40)).point(lambda a: a * 0.55))
-    shadow = shadow.transform((S, S), Image.AFFINE, (1, 0, 0, 0, 1, -24))
-    layer = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-    layer.alpha_composite(shadow)
-    layer.alpha_composite(art)
-    if scale != 1.0:
-        size = int(S * scale)
-        small = layer.resize((size, size), Image.LANCZOS)
-        layer = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-        layer.alpha_composite(small, ((S - size) // 2, (S - size) // 2))
-    img = background().convert("RGBA")
-    img.alpha_composite(layer)
-    return img.convert("RGB")
+    img = background()
+    img.paste(WHITE, (0, 0), mark(scale))
+    return img
 
 
 def main() -> None:
