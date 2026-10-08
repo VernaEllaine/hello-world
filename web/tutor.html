@@ -1,0 +1,693 @@
+<title>Tandem Tutor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Kalam:wght@400;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+/* Layout: one-screen chat. Sticky header, scrolling transcript, composer pinned to the bottom.
+   The tutor's corrections are written under your message in "red pen". */
+:root {
+  --paper: #F3F5F9;
+  --surface: #FFFFFF;
+  --ink: #1B2331;
+  --muted: #5B6677;
+  --rule: #DAE0E9;
+  --accent: #2C57CC;
+  --on-accent: #FFFFFF;
+  --pen: #C42F28;
+  --pen-wash: #FCEDEB;
+  --ok: #24764A;
+  --ok-wash: #E6F4EC;
+  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Source Sans 3", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-pen: "Kalam", "Comic Sans MS", "Bradley Hand", cursive;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #10141B; --surface: #1A2029; --ink: #E5E9F0; --muted: #97A2B3; --rule: #2A3241;
+    --accent: #7D9BF2; --on-accent: #0D1320; --pen: #FF7D70; --pen-wash: #2C1C1D; --ok: #62C990; --ok-wash: #16271F;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #10141B; --surface: #1A2029; --ink: #E5E9F0; --muted: #97A2B3; --rule: #2A3241;
+  --accent: #7D9BF2; --on-accent: #0D1320; --pen: #FF7D70; --pen-wash: #2C1C1D; --ok: #62C990; --ok-wash: #16271F;
+  color-scheme: dark;
+}
+
+html, body { height: 100%; }
+body {
+  background: var(--paper); color: var(--ink);
+  font: 17px/1.5 var(--font-body);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+button, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Header */
+header {
+  flex: none; background: var(--surface); border-bottom: 1px solid var(--rule);
+  padding-block: 10px; padding-inline: 16px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+}
+.brand { font: 700 20px/1.1 var(--font-display); letter-spacing: -0.01em; margin-right: auto; }
+.brand small { display: block; font: 400 12px/1.3 var(--font-body); color: var(--muted); letter-spacing: 0.02em; }
+.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 999px; padding: 2px; background: var(--paper); }
+.seg button {
+  border: 0; background: transparent; border-radius: 999px; padding: 4px 12px;
+  font-weight: 600; font-size: 14px; color: var(--muted);
+}
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+select {
+  border: 1px solid var(--rule); background: var(--paper); border-radius: 8px;
+  padding: 4px 6px; font-size: 14px; font-variant-numeric: tabular-nums;
+}
+.ghost { border: 1px solid var(--rule); background: transparent; border-radius: 8px; padding: 4px 10px; font-size: 14px; }
+.ghost.armed { border-color: var(--pen); color: var(--pen); }
+
+/* Transcript */
+main { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.log { max-width: 680px; margin: 0 auto; padding-block: 16px 24px; padding-inline: 16px; display: flex; flex-direction: column; gap: 14px; }
+
+.row { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.row.me { align-items: flex-end; }
+.row.tutor { align-items: flex-start; }
+.bubble {
+  max-width: 88%; min-width: 0; padding: 10px 14px; border-radius: 18px;
+  overflow-wrap: anywhere;
+}
+.me .bubble { background: var(--accent); color: var(--on-accent); border-bottom-right-radius: 6px; }
+.me .bubble.meta { background: transparent; color: var(--muted); border: 1px dashed var(--rule); font-style: italic; }
+.tutor .bubble { background: var(--surface); border: 1px solid var(--rule); border-bottom-left-radius: 6px; }
+.bubble p { margin: 0; }
+.bubble p + p { margin-top: 8px; }
+.thinking { color: var(--muted); font-style: italic; }
+
+/* Red-pen correction, attached under the learner's message */
+.pen {
+  max-width: 88%; min-width: 0; align-self: flex-end;
+  background: var(--pen-wash); border-radius: 12px; padding: 8px 12px 10px;
+  border: 1px solid color-mix(in srgb, var(--pen) 25%, transparent);
+}
+.pen .fixed { font: 400 20px/1.35 var(--font-pen); color: var(--pen); overflow-wrap: anywhere; }
+.pen ul { margin: 6px 0 0; padding-left: 18px; font-size: 15px; color: var(--ink); }
+.pen li + li { margin-top: 3px; }
+.pen li.tip { list-style: "→ "; color: var(--muted); }
+.pen .more { margin-top: 8px; border: 0; background: transparent; padding: 0; color: var(--pen); font-weight: 600; font-size: 14px; text-decoration: underline; text-underline-offset: 3px; }
+.stamp {
+  align-self: flex-end; font: 700 17px/1 var(--font-pen); color: var(--ok); background: var(--ok-wash);
+  padding: 5px 10px 3px; border-radius: 999px; transform: rotate(-3deg);
+}
+
+.vocab { max-width: 88%; font-size: 14px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px; }
+.vocab span { border: 1px solid var(--rule); border-radius: 6px; padding: 1px 8px; background: var(--surface); }
+.vocab b { color: var(--ink); font-weight: 600; }
+.tools { display: flex; gap: 12px; }
+.link { border: 0; background: transparent; padding: 0; font-size: 13px; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
+.translation { max-width: 88%; font-size: 15px; color: var(--muted); font-style: italic; border-left: 2px solid var(--rule); padding-left: 10px; }
+.error { align-self: center; font-size: 14px; color: var(--pen); text-align: center; max-width: 34ch; }
+
+/* Welcome */
+.welcome { background: var(--surface); border: 1px solid var(--rule); border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+.welcome h1 { margin: 0; font: 700 24px/1.15 var(--font-display); text-wrap: balance; letter-spacing: -0.01em; }
+.welcome p { margin: 0; color: var(--muted); }
+.example { border-top: 1px dashed var(--rule); padding-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+.eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); font-weight: 600; }
+.primary {
+  align-self: flex-start; border: 0; border-radius: 999px; padding: 10px 20px;
+  background: var(--accent); color: var(--on-accent); font-weight: 600;
+}
+.primary:disabled { opacity: 0.5; cursor: default; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { border: 1px solid var(--rule); background: var(--paper); border-radius: 999px; padding: 4px 12px; font-size: 14px; }
+.chip[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.hint { font-size: 14px; }
+.scene { align-self: center; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+
+/* Notebook */
+.notebook { display: flex; flex-direction: column; gap: 12px; }
+.nb-head { display: flex; flex-direction: column; gap: 10px; }
+.nb-head h1 { margin: 0; font: 700 24px/1.15 var(--font-display); letter-spacing: -0.01em; }
+.nb-head p { margin: 0; color: var(--muted); }
+.nb-card { background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; padding: 10px 14px 12px; min-width: 0; }
+.nb-meta { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+.nb-was { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--pen); overflow-wrap: anywhere; margin-top: 4px; }
+.nb-card .fixed { font: 400 20px/1.35 var(--font-pen); color: var(--pen); overflow-wrap: anywhere; }
+.nb-card ul { margin: 6px 0 0; padding-left: 18px; font-size: 15px; }
+.nb-card li.tip { list-style: "→ "; color: var(--muted); }
+
+/* Composer */
+footer {
+  flex: none; background: var(--surface); border-top: 1px solid var(--rule);
+  padding-block: 8px calc(10px + env(safe-area-inset-bottom, 0px)); padding-inline: 16px;
+}
+.composer { max-width: 680px; margin: 0 auto; display: flex; flex-direction: column; gap: 6px; }
+.keys { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.keys button {
+  flex: none; min-width: 34px; border: 1px solid var(--rule); background: var(--paper);
+  border-radius: 8px; padding: 2px 8px; font-size: 16px;
+}
+.inputrow { display: flex; gap: 8px; align-items: flex-end; }
+textarea {
+  flex: 1; min-width: 0; resize: none; max-height: 140px;
+  border: 1px solid var(--rule); background: var(--paper); border-radius: 18px;
+  padding: 9px 14px; font-size: 17px; line-height: 1.35;
+}
+.send {
+  flex: none; width: 44px; height: 44px; border-radius: 50%; border: 0;
+  background: var(--accent); color: var(--on-accent); display: grid; place-items: center;
+}
+.send.stop { background: var(--pen); color: var(--surface); }
+.send:disabled { opacity: 0.4; cursor: default; }
+.send svg { width: 20px; height: 20px; }
+
+</style>
+
+<header>
+  <div class="brand">Tandem Tutor<small>Chat, get corrected, keep going</small></div>
+  <div class="controls">
+    <div class="seg" role="group" aria-label="Language">
+      <button id="lang-de" data-lang="de" aria-pressed="true">Deutsch</button>
+      <button id="lang-fr" data-lang="fr" aria-pressed="false">Français</button>
+    </div>
+    <select id="level" aria-label="Your level (CEFR)">
+      <option>A1</option><option selected>A2</option><option>B1</option><option>B2</option><option>C1</option><option>C2</option>
+    </select>
+    <button id="nb" class="ghost" type="button">Notebook</button>
+    <button id="reset" class="ghost" type="button">New chat</button>
+  </div>
+</header>
+
+<main id="scroller"><div class="log" id="log"></div></main>
+
+<footer>
+  <form class="composer" id="composer">
+    <div class="keys" id="keys" aria-label="Special characters"></div>
+    <div class="inputrow">
+      <textarea id="input" rows="1" placeholder="Schreib etwas auf Deutsch…" aria-label="Your message"></textarea>
+      <button class="send" id="send" type="submit" aria-label="Send">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </button>
+    </div>
+  </form>
+</footer>
+
+<script>
+const LANGS = {
+  de: {
+    name: "German", native: "Deutsch",
+    greet: "Hallo! Ich möchte Deutsch üben.",
+    placeholder: "Schreib etwas auf Deutsch…",
+    perfect: "Perfekt!",
+    keys: ["ä", "ö", "ü", "ß", "Ä", "Ö", "Ü", "„", "“"],
+    example: {
+      me: "Gestern ich habe ins Kino gegangen.",
+      fixed: "Gestern bin ich ins Kino gegangen.",
+      notes: ["After a time word like „gestern“, the verb comes second: „Gestern bin ich…“.", "„gehen“ shows movement, so the perfect tense uses „sein“, not „haben“."],
+      reply: "Oh, schön! Welchen Film hast du gesehen?"
+    }
+  },
+  fr: {
+    name: "French", native: "Français",
+    greet: "Bonjour ! Je voudrais pratiquer le français.",
+    placeholder: "Écris quelque chose en français…",
+    perfect: "Parfait !",
+    keys: ["é", "è", "ê", "à", "â", "ç", "ô", "î", "ù", "û", "œ", "ë", "«", "»"],
+    example: {
+      me: "Hier j'ai allé au cinéma avec mon amie.",
+      fixed: "Hier, je suis allée au cinéma avec mon amie.",
+      notes: ["« aller » takes « être » in the passé composé: « je suis allé(e) ».", "With « être », the past participle agrees with the subject (allée if you're female)."],
+      reply: "Super ! Qu'est-ce que vous avez vu ?"
+    }
+  }
+};
+
+const MAX_TURNS = 40;
+const MAX_NOTEBOOK = 200;
+
+// Role-play scenes. `brief` goes to Claude; `label` is what the learner sees.
+const SCENES = [
+  { id: "free", label: "Free chat", brief: "" },
+  { id: "cafe", label: "Ordering at a café", brief: "Role-play: you are a friendly server at a café and the learner is a customer. Stay in character: take their order, answer questions about the menu, mention prices, bring the bill." },
+  { id: "bakery", label: "At the bakery", brief: "Role-play: you work at a bakery and the learner is buying bread and pastries. Stay in character: suggest items, give prices, count change." },
+  { id: "directions", label: "Asking for directions", brief: "Role-play: you are a local on the street and the learner is a lost tourist. Stay in character and give directions with real landmarks." },
+  { id: "hotel", label: "Hotel check-in", brief: "Role-play: you are a hotel receptionist and the learner is checking in. Stay in character: reservation, passport, breakfast times, wifi, a small problem with the room." },
+  { id: "doctor", label: "At the doctor's", brief: "Role-play: you are a doctor and the learner is a patient describing symptoms. Stay in character, ask follow-up questions and give simple advice." },
+  { id: "interview", label: "Job interview", brief: "Role-play: you are interviewing the learner for a job they choose. Stay in character and ask typical interview questions one at a time." },
+  { id: "smalltalk", label: "Meeting a new friend", brief: "Role-play: you have just met the learner at a party. Make small talk: where they're from, work, hobbies, plans." }
+];
+
+function reviewBrief(mistakes) {
+  const list = mistakes.map(m => `- They wrote "${m.original}" → correct: "${m.fixed}"`).join("\n");
+  return `Review drill instead of free conversation. These are mistakes the learner made recently:\n${list}\n\nRun a short drill, one item at a time: give the learner a NEW English sentence to translate into the target language that practises the same rule as one of these mistakes (never reuse their exact sentence). When they answer, correct it in the <fix> block as usual, add one encouraging sentence, then give the next sentence. After about six items, sum up which rules they have mastered and which to keep practising. Your first reply: say hello, explain the drill in one sentence, and give the first sentence.`;
+}
+
+function rules(L, level, scene) {
+  return `You are a warm, patient ${L.name} conversation partner and tutor inside a chat app. The learner is an English speaker practising ${L.name} at roughly CEFR level ${level}. The app parses your reply, so follow this format exactly.
+${scene ? "\n" + scene + "\nWhen a role-play is set, your first reply opens the scene in character instead of a general greeting.\n" : ""}
+
+For every learner message, start with a <fix> block:
+- If the message has grammar, spelling, word-order, gender/article, agreement, conjugation or word-choice mistakes, write:
+<fix>
+= the learner's whole message rewritten correctly in ${L.name}
+- one short note in English per mistake: what was wrong and the rule behind it
+- Tip: (optional, at most one) a more natural way a native speaker would say it
+</fix>
+- If it has no real mistakes, write exactly:
+<fix>
+✓
+</fix>
+- If the learner wrote in English, put the ${L.name} version on the "=" line and one note saying how they could have said it.
+Only correct real mistakes. Ignore missing capital letters at the start and missing final punctuation.
+
+After the </fix> block, continue the conversation in ${L.name}: react to what they said, share a little, and end with a question. Keep it to 2-4 short sentences, pitched at level ${level}: slightly challenging but understandable. No headings, no lists, plain sentences.
+
+Optionally end with up to three words that are likely new at this level:
+<vocab>
+word — English meaning
+</vocab>
+
+Special cases:
+- Your very first reply (answering the learner's greeting) has no <fix> block: just greet them, introduce yourself briefly with a first name, and ask an easy question to get started.
+- If the learner sends exactly "/explain", skip the <fix> block. In English, explain the grammar behind your most recent correction more fully, with two or three short ${L.name} example sentences, then invite them to continue in ${L.name}.
+- Stay in ${L.name} for the conversation itself unless the learner is clearly lost and asks for help in English.`;
+}
+
+// ---------- state ----------
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+};
+let lang = store.get("tt:lang", "de");
+if (!LANGS[lang]) lang = "de";
+const turns = { de: store.get("tt:turns:de", []), fr: store.get("tt:turns:fr", []) };
+// The scene brief for each language's current chat ("" = free chat)
+const scenes = { de: store.get("tt:scene:de", { label: "Free chat", brief: "" }), fr: store.get("tt:scene:fr", { label: "Free chat", brief: "" }) };
+let notebook = store.get("tt:notebook", []);
+let view = "chat";              // chat | notebook
+const translations = {};
+const canSpeak = "speechSynthesis" in window && typeof SpeechSynthesisUtterance === "function";
+let pending = null;     // streaming assistant text, or "" while thinking
+let busy = false;
+let ctl = null;
+let errorMsg = "";
+let sample = null;
+let sampleState = "loading"; // loading | ready | absent
+
+const $ = (id) => document.getElementById(id);
+const log = $("log"), scroller = $("scroller"), input = $("input"), sendBtn = $("send");
+$("level").value = store.get("tt:level", "A2");
+
+// ---------- parsing ----------
+function parse(text) {
+  let t = text.replace(/<[^>]*$/, "");            // hide a half-written tag while streaming
+  const grab = (tag) => {
+    const open = t.indexOf("<" + tag + ">");
+    if (open < 0) return null;
+    const close = t.indexOf("</" + tag + ">", open);
+    const inner = t.slice(open + tag.length + 2, close < 0 ? t.length : close);
+    t = t.slice(0, open) + (close < 0 ? "" : t.slice(close + tag.length + 3));
+    return inner.trim();
+  };
+  const fixRaw = grab("fix");
+  const vocabRaw = grab("vocab");
+  let fix = null;
+  if (fixRaw !== null) {
+    const lines = fixRaw.split("\n").map(s => s.trim()).filter(Boolean);
+    const ok = lines.length > 0 && /^(✓|✅|ok\b)/i.test(lines[0]) && !lines.some(l => l.startsWith("="));
+    fix = { ok, fixed: "", notes: [], pending: fixRaw === "" };
+    for (const l of lines) {
+      if (l.startsWith("=")) fix.fixed = l.slice(1).trim();
+      else if (/^[-•*]\s*/.test(l)) {
+        const note = l.replace(/^[-•*]\s*/, "");
+        fix.notes.push({ tip: /^tip:/i.test(note), text: note.replace(/^tip:\s*/i, "") });
+      }
+    }
+  }
+  const vocab = vocabRaw ? vocabRaw.split("\n").map(s => s.replace(/^[-•*]\s*/, "").trim()).filter(Boolean) : [];
+  return { fix, vocab, body: t.trim() };
+}
+
+function paragraphs(el, text) {
+  for (const para of text.split(/\n{2,}/)) {
+    if (!para.trim()) continue;
+    const p = document.createElement("p");
+    // **bold** -> <strong>, everything else as text
+    para.split(/(\*\*[^*]+\*\*)/).forEach(part => {
+      if (/^\*\*[^*]+\*\*$/.test(part)) { const b = document.createElement("strong"); b.textContent = part.slice(2, -2); p.append(b); }
+      else p.append(part.replace(/\n/g, " "));
+    });
+    el.append(p);
+  }
+}
+
+// ---------- rendering ----------
+const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+
+function correctionNode(fix, isLatest) {
+  const L = LANGS[lang];
+  if (fix.ok) return el("div", "stamp", "✓ " + L.perfect);
+  const box = el("div", "pen");
+  if (fix.fixed) box.append(el("div", "fixed", fix.fixed));
+  if (fix.notes.length) {
+    const ul = el("ul");
+    fix.notes.forEach(n => ul.append(el("li", n.tip ? "tip" : "", n.text)));
+    box.append(ul);
+  }
+  if (!fix.fixed && !fix.notes.length) box.append(el("div", "thinking", "Checking…"));
+  if (isLatest && !busy && fix.fixed && sampleState === "ready") {
+    const more = el("button", "more", "Explain this in more detail");
+    more.type = "button";
+    more.onclick = () => send("/explain");
+    box.append(more);
+  }
+  return box;
+}
+
+function tutorNodes(text, key, streaming) {
+  const out = [];
+  const { vocab, body } = parse(text);
+  const row = el("div", "row tutor");
+  const bubble = el("div", "bubble");
+  if (body) paragraphs(bubble, body); else bubble.append(el("span", "thinking", streaming ? "Thinking…" : ""));
+  row.append(bubble);
+  if (vocab.length) {
+    const v = el("div", "vocab");
+    vocab.forEach(item => {
+      const [w, ...m] = item.split(/\s+[—–-]\s+/);
+      const s = el("span"); const b = el("b", null, w); s.append(b);
+      if (m.length) s.append(" " + m.join(" – "));
+      v.append(s);
+    });
+    row.append(v);
+  }
+  if (!streaming && body) {
+    const tr = translations[key];
+    const tools = el("div", "tools");
+    if (canSpeak) {
+      const say = el("button", "link", "🔊 Listen");
+      say.type = "button";
+      say.onclick = () => speak(body.replace(/\*\*/g, ""));
+      tools.append(say);
+    }
+    if (!(tr && tr.text) && sampleState === "ready") {
+      const b = el("button", "link", tr && tr.loading ? "Translating…" : "Show in English");
+      b.type = "button";
+      b.disabled = !!(tr && tr.loading);
+      b.onclick = () => translate(key, body);
+      tools.append(b);
+    }
+    if (tools.childElementCount) row.append(tools);
+    if (tr && tr.text) row.append(el("div", "translation", tr.text));
+  }
+  out.push(row);
+  return out;
+}
+
+function welcomeNode() {
+  const L = LANGS[lang], ex = L.example;
+  const w = el("section", "welcome");
+  w.append(el("h1", null, `Practise ${L.name} by just talking`));
+  w.append(el("p", null, "Write to your tutor about anything. Each time, you get your sentence back corrected in red pen, with a short note on why, and the conversation keeps going."));
+  const exBox = el("div", "example");
+  exBox.append(el("div", "eyebrow", "Example"));
+  const r1 = el("div", "row me"); r1.append(el("div", "bubble", ex.me)); exBox.append(r1);
+  exBox.append(correctionNode({ ok: false, fixed: ex.fixed, notes: ex.notes.map(t => ({ text: t })) }, false));
+  const r2 = el("div", "row tutor"); r2.append(el("div", "bubble", ex.reply)); exBox.append(r2);
+  w.append(exBox);
+
+  const pick = el("div", "example");
+  pick.append(el("div", "eyebrow", "Choose a scene"));
+  const chips = el("div", "chips");
+  const chosen = store.get("tt:pick:" + lang, "free");
+  SCENES.forEach(s => {
+    const c = el("button", "chip", s.label);
+    c.type = "button";
+    c.setAttribute("aria-pressed", String(s.id === chosen));
+    c.onclick = () => { store.set("tt:pick:" + lang, s.id); render(); };
+    chips.append(c);
+  });
+  pick.append(chips);
+  w.append(pick);
+
+  const scene = SCENES.find(s => s.id === chosen) || SCENES[0];
+  const start = el("button", "primary", sampleState === "absent" ? "Unavailable here" : `Start in ${L.native}`);
+  start.type = "button";
+  start.disabled = busy || sampleState !== "ready";
+  start.onclick = () => startChat({ label: scene.label, brief: scene.brief });
+  w.append(start);
+  if (sampleState === "absent") w.append(el("p", null, "This page talks to Claude through your Claude account. Open it in the Claude app or at claude.ai while signed in."));
+  if (sampleState === "loading") w.append(el("p", null, "Connecting to Claude…"));
+  w.append(el("p", "hint", "To practise speaking, tap the microphone on your phone's keyboard and dictate your answer. Tap 🔊 Listen under any reply to hear it read aloud."));
+  return w;
+}
+
+function startChat(scene) {
+  scenes[lang] = scene; store.set("tt:scene:" + lang, scene);
+  turns[lang] = []; store.set("tt:turns:" + lang, []);
+  Object.keys(translations).forEach(k => { if (k.startsWith(lang + ":")) delete translations[k]; });
+  view = "chat";
+  send(LANGS[lang].greet, true);
+}
+
+function notebookNode() {
+  const L = LANGS[lang];
+  const mine = notebook.filter(m => m.lang === lang);
+  const wrap = el("section", "notebook");
+  const head = el("div", "nb-head");
+  head.append(el("h1", null, `My ${L.name} mistakes`));
+  head.append(el("p", null, mine.length
+    ? `${mine.length} saved. Every correction from your chats lands here automatically.`
+    : "Nothing yet. Every correction from your chats lands here automatically, so you can review it later."));
+  if (mine.length && sampleState === "ready") {
+    const drill = el("button", "primary", "Start a review drill");
+    drill.type = "button";
+    drill.disabled = busy;
+    drill.onclick = () => startChat({ label: "Review drill", brief: reviewBrief(mine.slice(0, 8)) });
+    head.append(drill);
+    head.append(el("p", "hint", "The drill starts a new chat using your 8 most recent mistakes."));
+  }
+  wrap.append(head);
+  mine.forEach(m => {
+    const card = el("article", "nb-card");
+    const meta = el("div", "nb-meta");
+    meta.append(el("span", null, new Date(m.at).toLocaleDateString(undefined, { day: "numeric", month: "short" })));
+    const del = el("button", "link", "Remove");
+    del.type = "button";
+    del.onclick = () => { notebook = notebook.filter(x => x !== m); store.set("tt:notebook", notebook); render(); };
+    meta.append(del);
+    card.append(meta);
+    card.append(el("div", "nb-was", m.original));
+    card.append(el("div", "fixed", m.fixed));
+    if (m.notes.length) {
+      const ul = el("ul");
+      m.notes.forEach(n => ul.append(el("li", n.tip ? "tip" : "", n.text)));
+      card.append(ul);
+    }
+    wrap.append(card);
+  });
+  return wrap;
+}
+
+function speak(text) {
+  try {
+    const synth = window.speechSynthesis;
+    synth.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = lang === "de" ? "de-DE" : "fr-FR";
+    const voice = synth.getVoices().find(v => v.lang && v.lang.toLowerCase().startsWith(lang));
+    if (voice) u.voice = voice;
+    u.rate = 0.9;
+    synth.speak(u);
+  } catch {}
+}
+
+function render() {
+  const nearBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 120;
+  const T = turns[lang];
+  log.replaceChildren();
+  renderControls();
+  if (view === "notebook") { log.append(notebookNode()); return; }
+  const all = pending !== null ? [...T, { role: "assistant", content: pending, streaming: true }] : T;
+
+  if (all.length === 0) log.append(welcomeNode());
+  else log.append(el("div", "scene", "Scene: " + scenes[lang].label));
+
+  // Index of the last assistant reply with a real correction, for the "Explain" link
+  let latestFix = -1;
+  all.forEach((t, i) => { if (t.role === "assistant" && !t.streaming) { const f = parse(t.content).fix; if (f && !f.ok) latestFix = i; } });
+  if (pending !== null) latestFix = -1;
+
+  all.forEach((t, i) => {
+    if (t.role === "user") {
+      if (i === 0) return;                                   // the hidden opening greeting
+      const row = el("div", "row me");
+      if (t.content === "/explain") row.append(el("div", "bubble meta", "Explain that correction, please"));
+      else row.append(el("div", "bubble", t.content));
+      const next = all[i + 1];
+      if (next && next.role === "assistant" && next.content !== "/explain" && t.content !== "/explain") {
+        const { fix } = parse(next.content);
+        if (fix) row.append(correctionNode(fix, i + 1 === latestFix));
+      }
+      log.append(row);
+    } else {
+      log.append(...tutorNodes(t.content, lang + ":" + i, !!t.streaming));
+    }
+  });
+
+  if (errorMsg) log.append(el("div", "error", errorMsg));
+  if (nearBottom || pending !== null) scroller.scrollTop = scroller.scrollHeight;
+  renderControls();
+}
+
+function renderControls() {
+  const L = LANGS[lang];
+  document.querySelectorAll(".seg button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.lang === lang)));
+  const count = notebook.filter(m => m.lang === lang).length;
+  $("nb").textContent = view === "notebook" ? "Back to chat" : `Notebook${count ? " · " + count : ""}`;
+  $("composer").hidden = view === "notebook";
+  input.placeholder = L.placeholder;
+  const keys = $("keys");
+  if (keys.dataset.lang !== lang) {
+    keys.dataset.lang = lang;
+    keys.replaceChildren(...L.keys.map(k => {
+      const b = el("button", null, k); b.type = "button"; b.tabIndex = -1;
+      b.onmousedown = (e) => e.preventDefault();              // keep the keyboard open
+      b.onclick = () => insertChar(k);
+      return b;
+    }));
+  }
+  const started = turns[lang].length > 0;
+  input.disabled = !started || sampleState !== "ready";
+  if (busy) {
+    sendBtn.classList.add("stop"); sendBtn.disabled = false; sendBtn.setAttribute("aria-label", "Stop");
+    sendBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
+  } else {
+    sendBtn.classList.remove("stop"); sendBtn.setAttribute("aria-label", "Send");
+    sendBtn.disabled = !started || sampleState !== "ready" || !input.value.trim();
+    sendBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
+  }
+}
+
+function insertChar(ch) {
+  const s = input.selectionStart ?? input.value.length, e = input.selectionEnd ?? s;
+  input.value = input.value.slice(0, s) + ch + input.value.slice(e);
+  input.focus();
+  input.setSelectionRange(s + ch.length, s + ch.length);
+  autosize(); renderControls();
+}
+
+function autosize() { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 140) + "px"; }
+
+// ---------- talking to Claude ----------
+const ERRORS = {
+  not_granted: "Claude access wasn't allowed for this page. Reload the page to be asked again.",
+  sampling_disabled: "Claude isn't available on this account.",
+  rate_limited: "You've hit a usage limit. Wait a little, then send again.",
+  session_expired: "Your Claude session expired. Sign in again, then resend.",
+  refused: "Claude couldn't answer that message. Try saying it differently.",
+  empty_completion: "The tutor didn't reply. Try sending again.",
+  prompt_too_large: "The conversation got too long. Tap New chat to start fresh."
+};
+
+async function send(content, opening = false) {
+  if (busy || !sample) return;
+  const L = LANGS[lang], T = turns[lang], myLang = lang;
+  errorMsg = "";
+  T.push({ role: "user", content });
+  busy = true; pending = ""; ctl = new AbortController();
+  render();
+  const history = T.slice(-MAX_TURNS);
+  try {
+    const { text } = await sample([{ role: "user", content: rules(L, $("level").value, scenes[myLang].brief) }, ...history], {
+      cache: false,
+      signal: ctl.signal,
+      onText: ({ text }) => { if (lang === myLang) { pending = text; render(); } }
+    });
+    T.push({ role: "assistant", content: text });
+    store.set("tt:turns:" + myLang, T);
+    const { fix } = parse(text);
+    if (!opening && content !== "/explain" && fix && !fix.ok && fix.fixed) {
+      notebook.unshift({ lang: myLang, original: content, fixed: fix.fixed, notes: fix.notes, at: Date.now() });
+      notebook = notebook.slice(0, MAX_NOTEBOOK);
+      store.set("tt:notebook", notebook);
+    }
+  } catch (e) {
+    T.pop();                                                   // take the message back so it can be resent
+    if (!opening && content !== "/explain" && !input.value) input.value = content;
+    if (e && (e.code === "not_granted" || e.code === "sampling_disabled")) sampleState = "absent";
+    if (!(e && e.code === "cancelled")) errorMsg = ERRORS[e && e.code] || "The connection dropped before the tutor finished. Send again.";
+  } finally {
+    busy = false; pending = null; ctl = null;
+    if (lang === myLang) render(); else renderControls();
+    autosize();
+  }
+}
+
+async function translate(key, body) {
+  if (!sample) return;
+  translations[key] = { loading: true }; render();
+  try {
+    const { text } = await sample(`Translate this ${LANGS[lang].name} text into natural English. Reply with only the translation.\n\n${body}`, { modelTier: "quick" });
+    translations[key] = { text };
+  } catch (e) {
+    delete translations[key];
+    if (!(e && e.code === "cancelled")) errorMsg = ERRORS[e && e.code] || "Couldn't translate that. Try again.";
+  }
+  render();
+}
+
+// ---------- events ----------
+$("composer").addEventListener("submit", (e) => {
+  e.preventDefault();
+  if (busy) { ctl?.abort(); return; }
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = ""; autosize();
+  send(text);
+});
+input.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey && !e.isComposing && window.matchMedia("(pointer: fine)").matches) {
+    e.preventDefault(); $("composer").requestSubmit();
+  }
+});
+input.addEventListener("input", () => { autosize(); renderControls(); });
+
+$("nb").addEventListener("click", () => {
+  view = view === "notebook" ? "chat" : "notebook";
+  render();
+  scroller.scrollTop = view === "notebook" ? 0 : scroller.scrollHeight;
+});
+
+document.querySelectorAll(".seg button").forEach(b => b.addEventListener("click", () => {
+  if (busy || b.dataset.lang === lang) return;
+  lang = b.dataset.lang; store.set("tt:lang", lang); errorMsg = "";
+  render();
+}));
+$("level").addEventListener("change", () => store.set("tt:level", $("level").value));
+
+let armTimer = null;
+$("reset").addEventListener("click", (e) => {
+  const btn = e.currentTarget;
+  if (busy) return;
+  if (!btn.classList.contains("armed")) {
+    btn.classList.add("armed"); btn.textContent = "Tap again to clear";
+    armTimer = setTimeout(() => { btn.classList.remove("armed"); btn.textContent = "New chat"; }, 3000);
+    return;
+  }
+  clearTimeout(armTimer);
+  btn.classList.remove("armed"); btn.textContent = "New chat";
+  turns[lang] = []; store.set("tt:turns:" + lang, []); errorMsg = ""; view = "chat";
+  Object.keys(translations).forEach(k => { if (k.startsWith(lang + ":")) delete translations[k]; });
+  render();
+});
+
+render();
+(async () => {
+  try { sample = window.claude ? await window.claude.use("sample") : null; } catch { sample = null; }
+  sampleState = sample ? "ready" : "absent";
+  render();
+})();
+</script>

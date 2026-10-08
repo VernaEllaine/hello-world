@@ -30,3 +30,15 @@ python language_tutor.py -l french --level A1
 `--level` is your CEFR level (A1 beginner → C2 fluent, default A2). The tutor adjusts its vocabulary to match.
 
 While chatting, type `/explain` for a deeper English explanation of the last correction, `/help` for commands, or `/quit` to stop.
+
+### On your phone
+
+`web/tutor.html` is the same tutor as a mobile web page, published as a Claude artifact:
+https://claude.ai/artifact/SdXiBfgpVMPaKeaesQJyh8
+
+It runs inside the Claude app (or claude.ai) on your own Claude account, so no API key is needed. Extras:
+
+- **Role-play scenes**: café, bakery, directions, hotel, doctor, job interview, small talk
+- **Mistake notebook**: every correction is saved, and a review drill quizzes you on your recent mistakes
+- **Listen**: replies are read aloud in a German or French voice
+- **Speaking**: dictate with your phone keyboard's microphone
