@@ -723,7 +723,14 @@ function chosenVoice() {
 const voicePrefs = { rate: store.get("tt:rate", 0.95), auto: store.get("tt:auto", false), volume: store.get("tt:volume", 1) };
 
 let speakId = 0;
+// After the mic has been used, iPhones keep audio in a low-quality "call" mode, which makes
+// speech sound choppy. Safari's Audio Session API lets the page switch back to normal playback.
+function setAudioMode(mode) {
+  try { if (navigator.audioSession) navigator.audioSession.type = mode; } catch {}
+}
+
 function speak(text, onEnd) {
+  setAudioMode("playback");
   const id = ++speakId;
   const done = () => { if (id === speakId && onEnd) onEnd(); };
   if (cloudVoiceOn()) {
@@ -1260,6 +1267,7 @@ function armSilenceTimer(t) {
 function listen() {
   if (!canListen || listening || busy || sampleState !== "ready") return;
   stopSpeaking();
+  setAudioMode("play-and-record");
   const t = { committed: "", current: "", timer: null, done: false, cancelled: false, fatal: false, quickEnds: 0 };
   turn = t;
   input.value = "";
@@ -1322,6 +1330,7 @@ function finalizeTurn(t) {
   if (turn !== t) return;
   clearTimeout(t.timer);
   turn = null; rec = null; listening = false;
+  setAudioMode("playback");
   const text = heardSoFar(t);
   input.value = ""; autosize();
   if (text && !t.cancelled) { send(text); return; }
