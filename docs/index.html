@@ -785,8 +785,9 @@ async function speakCloud(text, id) {
   const data = await res.arrayBuffer();
   if (id !== speakId) return "stale";
 
-  // Preferred: decode the whole clip and play it as one buffer through the volume control
-  if (audioCtx && gainNode) {
+  // At 100% volume, play with the phone's own audio player: the simplest and smoothest path.
+  // Only a changed volume goes through Web Audio (iPhones ignore an audio element's volume).
+  if (audioCtx && gainNode && Math.abs(voicePrefs.volume - 1) > 0.01) {
     if (audioCtx.state !== "running") { try { await audioCtx.resume(); } catch {} }
     if (audioCtx.state !== "running") throw { status: -1 };   // paused by the phone: read with the phone voice instead
     const clip = await new Promise((resolve, reject) => audioCtx.decodeAudioData(data, resolve, () => reject({ status: 0 })));
@@ -802,7 +803,7 @@ async function speakCloud(text, id) {
     return id === speakId ? "ok" : "stale";
   }
 
-  // Fallback without Web Audio: a plain audio element at normal speed
+  // Standard playback: a plain audio element at normal speed (ElevenLabs already applied the speed)
   if (playerUrl) URL.revokeObjectURL(playerUrl);
   playerUrl = URL.createObjectURL(new Blob([data], { type: "audio/mpeg" }));
   player.src = playerUrl;
