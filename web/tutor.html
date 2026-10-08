@@ -701,8 +701,12 @@ const voicePrefs = { rate: store.get("tt:rate", 0.95), auto: store.get("tt:auto"
 let speakId = 0;
 // After the mic has been used, iPhones keep audio in a low-quality "call" mode, which makes
 // speech sound choppy. Safari's Audio Session API lets the page switch back to normal playback.
+// Only once the mic has been used: before that, leave the phone's default audio mode alone.
+let micUsed = false;
 function setAudioMode(mode) {
-  try { if (navigator.audioSession) navigator.audioSession.type = mode; } catch {}
+  if (mode === "play-and-record") micUsed = true;
+  if (!micUsed) return;
+  try { if (navigator.audioSession && navigator.audioSession.type !== mode) navigator.audioSession.type = mode; } catch {}
 }
 
 function speak(text, onEnd) {
@@ -712,7 +716,8 @@ function speak(text, onEnd) {
   if (cloudVoiceOn()) {
     speakCloud(text, id).then(r => { if (r === "ok") done(); }).catch((e) => {
       if (id !== speakId) return;
-      errorMsg = e && e.status === -1 ? "Your phone paused the natural voice. Tap anywhere to bring it back; the phone voice read this one."
+      errorMsg = e && e.status === -2 ? "Your phone blocked the natural voice for this reply, so the phone voice read it. Tap anywhere and it should come back."
+        : e && e.status === -1 ? "Your phone paused the natural voice. Tap anywhere to bring it back; the phone voice read this one."
         : e && e.status === 401 ? "The ElevenLabs key didn't work, so the phone voice is reading instead."
         : e && (e.status === 402 || e.status === 429) ? "Your ElevenLabs allowance is used up for now, so the phone voice is reading instead."
         : "The natural voice couldn't load, so the phone voice is reading instead.";
@@ -761,35 +766,54 @@ async function speakCloud(text, id) {
   const data = await res.arrayBuffer();
   if (id !== speakId) return "stale";
 
-  // At 100% volume, play with the phone's own audio player: the simplest and smoothest path.
-  // Only a changed volume goes through Web Audio (iPhones ignore an audio element's volume).
-  if (audioCtx && gainNode && Math.abs(voicePrefs.volume - 1) > 0.01) {
-    if (audioCtx.state !== "running") { try { await audioCtx.resume(); } catch {} }
-    if (audioCtx.state !== "running") throw { status: -1 };   // paused by the phone: read with the phone voice instead
-    const clip = await new Promise((resolve, reject) => audioCtx.decodeAudioData(data, resolve, () => reject({ status: 0 })));
-    if (id !== speakId) return "stale";
-    await new Promise((resolve) => {
-      const src = audioCtx.createBufferSource();
-      src.buffer = clip;
-      src.connect(gainNode);
-      src.onended = () => { if (currentSource === src) currentSource = null; resolve(); };
-      currentSource = src;
-      src.start();
-    });
-    return id === speakId ? "ok" : "stale";
+  // Two ways to play; if the first doesn't start (iPhones can block it), try the other.
+  // At 100% volume the phone's own audio player goes first; a changed volume needs Web Audio
+  // (iPhones ignore an audio element's volume).
+  const canBuffer = !!(audioCtx && gainNode);
+  const order = canBuffer && Math.abs(voicePrefs.volume - 1) > 0.01 ? [playBuffer, playElement]
+    : canBuffer ? [playElement, playBuffer] : [playElement];
+  let lastErr = { status: 0 };
+  for (const play of order) {
+    try { return await play(data, id); }
+    catch (e) { lastErr = e; if (id !== speakId) return "stale"; }
   }
+  throw lastErr;
+}
 
-  // Standard playback: a plain audio element at normal speed (ElevenLabs already applied the speed)
+// Decode the whole clip and play it as one buffer through the volume control
+async function playBuffer(data, id) {
+  if (audioCtx.state !== "running") { try { await audioCtx.resume(); } catch {} }
+  if (audioCtx.state !== "running") throw { status: -1 };   // paused by the phone
+  const clip = await new Promise((resolve, reject) => audioCtx.decodeAudioData(data.slice(0), resolve, () => reject({ status: 0 })));
+  if (id !== speakId) return "stale";
+  await new Promise((resolve) => {
+    const src = audioCtx.createBufferSource();
+    src.buffer = clip;
+    src.connect(gainNode);
+    src.onended = () => { if (currentSource === src) currentSource = null; resolve(); };
+    currentSource = src;
+    src.start();
+  });
+  return id === speakId ? "ok" : "stale";
+}
+
+// The phone's own audio player at normal speed (ElevenLabs already applied the speed).
+// If it hasn't started within 2.5 s, treat it as blocked so the other method can take over.
+async function playElement(data, id) {
   if (playerUrl) URL.revokeObjectURL(playerUrl);
   playerUrl = URL.createObjectURL(new Blob([data], { type: "audio/mpeg" }));
   player.src = playerUrl;
   player.playbackRate = 1;
   player.volume = Math.min(1, voicePrefs.volume);
   await new Promise((resolve, reject) => {
-    player.finish = () => { player.finish = null; resolve(); };
+    let started = false;
+    const fail = () => { clearTimeout(watchdog); player.finish = null; try { player.pause(); } catch {} reject({ status: -2 }); };
+    const watchdog = setTimeout(() => { if (!started) fail(); }, 2500);
+    player.onplaying = () => { started = true; clearTimeout(watchdog); };
+    player.finish = () => { clearTimeout(watchdog); player.finish = null; resolve(); };
     player.onended = () => player.finish && player.finish();
-    player.onerror = () => { player.finish = null; reject({ status: 0 }); };
-    player.play().catch(() => { player.finish = null; reject({ status: 0 }); });
+    player.onerror = fail;
+    player.play().catch(fail);
   });
   return id === speakId ? "ok" : "stale";
 }
