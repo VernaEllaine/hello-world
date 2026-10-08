@@ -2,11 +2,24 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Practise German or French by talking with a tutor who corrects your grammar.">
 <meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0C0C0C" media="(prefers-color-scheme: dark)">
-<style>*, *::before, *::after { box-sizing: border-box; } body { margin: 0; }</style>
+<!-- Home Screen app: name, icon, and full-screen launch -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Tandem">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body { margin: 0; }
+  /* Full-screen on a phone: keep the header clear of the clock and notch */
+  header { padding-top: calc(10px + env(safe-area-inset-top, 0px)) !important; padding-left: max(16px, env(safe-area-inset-left, 0px)) !important; padding-right: max(16px, env(safe-area-inset-right, 0px)) !important; }
+</style>
 </head>
 <body>
 <title>Tandem Tutor</title>

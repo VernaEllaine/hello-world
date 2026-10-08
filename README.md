@@ -54,4 +54,6 @@ Claude artifacts can't use the microphone, so the same page is also published as
 
 The standalone site calls the Claude API with your own API key (from console.anthropic.com), which is saved only in your browser. Usage is billed to your API account.
 
+On a phone, use **Add to Home Screen** (Safari: Share → Add to Home Screen) to get the Tandem icon and open it full-screen like an app. The icons are drawn by `python web/make_icons.py` (needs Pillow) and the app manifest is written by `web/build_pages.py`.
+
 To put it online: repository **Settings → Pages → Build and deployment → Deploy from a branch**, pick the branch and the `/docs` folder. It will be at `https://vernaellaine.github.io/hello-world/`.
