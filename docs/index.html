@@ -250,8 +250,8 @@ textarea:focus-visible { outline: none; }
     <select id="level" class="level" aria-label="Your level">
       <option>A1</option><option selected>A2</option><option>B1</option><option>B2</option><option>C1</option><option>C2</option>
     </select>
-    <button id="voice" class="icon-btn" type="button" aria-expanded="false" aria-controls="voice-panel" aria-label="Voice settings">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>
+    <button id="voice" class="icon-btn" type="button" aria-expanded="false" aria-controls="voice-panel" aria-label="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
     </button>
     <button id="nb" class="icon-btn" type="button" aria-label="Mistakes">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-6-4-6 4V3z"/></svg>
@@ -867,7 +867,7 @@ function unlockSpeech() {
 
 function naturalVoiceSection() {
   const L = LANGS[lang];
-  const out = [el("div", "eyebrow", "Natural voice")];
+  const out = [el("div", "eyebrow", "ElevenLabs key (natural voice)")];
   if (!elKey) {
     const p = el("p", "hint");
     const a = el("a", null, "elevenlabs.io"); a.href = "https://elevenlabs.io/app/settings/api-keys"; a.target = "_blank"; a.rel = "noopener";
@@ -922,10 +922,18 @@ function renderVoicePanel() {
   const inner = el("div", "panel-inner");
   const L = LANGS[lang];
   if (!IN_CLAUDE) {
-    inner.append(el("div", "eyebrow", "Claude API key"));
+    inner.append(el("div", "eyebrow", "Claude API key (for Lena's replies)"));
     inner.append(keyForm());
   }
   if (player) inner.append(...naturalVoiceSection());
+  else {
+    // Inside Claude the page can't reach ElevenLabs: point to the standalone site
+    inner.append(el("div", "eyebrow", "Natural voice"));
+    const p = el("p", "hint");
+    const a = el("a", null, "Tandem website"); a.href = MIC_APP_URL; a.target = "_blank"; a.rel = "noopener";
+    p.append("The ElevenLabs natural voice and the mic only work on the ", a, ". Open it in Safari, then add your ElevenLabs key under the ⚙️ settings icon.");
+    inner.append(p);
+  }
   if (canListen) {
     inner.append(el("div", "eyebrow", "Hands-free"));
     const row = el("label", "panel-row");
@@ -1104,8 +1112,8 @@ const ERRORS = {
   prompt_too_large: "The conversation got too long. Tap New chat to start fresh."
 };
 
-ERRORS.no_key = "Add your Claude API key (speaker icon at the top) to start.";
-ERRORS.bad_key = "That API key didn't work. Check it under the speaker icon at the top.";
+ERRORS.no_key = "Add your Claude API key (⚙️ settings icon at the top) to start.";
+ERRORS.bad_key = "That API key didn't work. Check it under the ⚙️ settings icon at the top.";
 ERRORS.bad_request = "Claude couldn't process that request. Start a new chat and try again.";
 
 // ---------- backends ----------
