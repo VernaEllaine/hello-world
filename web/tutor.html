@@ -126,6 +126,15 @@ main { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 .hint { font-size: 14px; }
 .scene { align-self: center; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
 
+/* Voice settings */
+.panel { flex: none; background: var(--surface); border-bottom: 1px solid var(--rule); padding-block: 12px; padding-inline: 16px; max-height: 55vh; overflow-y: auto; }
+.panel-inner { max-width: 680px; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; }
+.panel-row { display: flex; align-items: center; gap: 10px; min-width: 0; font-size: 15px; }
+.panel-row select { flex: 1; min-width: 0; font-size: 15px; padding: 6px; }
+.panel-row input[type="range"] { flex: 1; min-width: 0; accent-color: var(--accent); }
+.panel-row input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--accent); }
+.panel .hint { margin: 0; color: var(--muted); }
+
 /* Notebook */
 .notebook { display: flex; flex-direction: column; gap: 12px; }
 .nb-head { display: flex; flex-direction: column; gap: 10px; }
@@ -176,9 +185,12 @@ textarea {
       <option>A1</option><option selected>A2</option><option>B1</option><option>B2</option><option>C1</option><option>C2</option>
     </select>
     <button id="nb" class="ghost" type="button">Notebook</button>
+    <button id="voice" class="ghost" type="button" aria-expanded="false" aria-controls="voice-panel">Voice</button>
     <button id="reset" class="ghost" type="button">New chat</button>
   </div>
 </header>
+
+<section id="voice-panel" class="panel" hidden></section>
 
 <main id="scroller"><div class="log" id="log"></div></main>
 
@@ -491,18 +503,110 @@ function notebookNode() {
   return wrap;
 }
 
+// ---------- voice ----------
+// Rank the device's voices so a natural-sounding female voice wins.
+const FEMALE = {
+  de: /anna|petra|helena|marlene|vicki|katja|hedda|amala|louisa|seraphina|tanja|ingrid|google deutsch/i,
+  fr: /am[ée]lie|audrey|aur[ée]lie|marie|julie|hortense|denise|c[ée]line|l[ée]a|virginie|eloise|vivienne|brigitte|google fran[cç]ais/i
+};
+const MALE = /markus|yannick|martin|thomas|daniel|nicolas|henri|paul|stefan|conrad|killian|jacques|fred|eddy|reed|rocko|grandpa|klaus|hans|jonas|antoine|alain|remy|gerard|florian|ralf/i;
+const NOVELTY = /eddy|flo|grandma|grandpa|reed|rocko|sandy|shelley|bells|bubbles|jester|organ|trinoids|whisper|zarvox|albert|bad news|boing|cellos|good news|superstar|wobble/i;
+
+function scoreVoice(v) {
+  let s = 0;
+  if (/premium|enhanced|natural|neural|online|wavenet|studio/i.test(v.name)) s += 6;
+  if (v.localService === false) s += 3;                       // cloud voices are usually the most natural
+  if (FEMALE[lang].test(v.name)) s += 4;
+  if (MALE.test(v.name)) s -= 6;
+  if (NOVELTY.test(v.name)) s -= 10;
+  if (/compact/i.test(v.name)) s -= 2;
+  return s;
+}
+
+function voicesFor() {
+  if (!canSpeak) return [];
+  return window.speechSynthesis.getVoices()
+    .filter(v => v.lang && v.lang.toLowerCase().replace("_", "-").startsWith(lang))
+    .sort((a, b) => scoreVoice(b) - scoreVoice(a) || a.name.localeCompare(b.name));
+}
+
+function chosenVoice() {
+  const list = voicesFor();
+  const saved = store.get("tt:voice:" + lang, "");
+  return list.find(v => v.voiceURI === saved) || list[0] || null;
+}
+
+const voicePrefs = { rate: store.get("tt:rate", 0.95), auto: store.get("tt:auto", false) };
+
 function speak(text) {
+  if (!canSpeak) return;
   try {
     const synth = window.speechSynthesis;
     synth.cancel();
     const u = new SpeechSynthesisUtterance(text);
     u.lang = lang === "de" ? "de-DE" : "fr-FR";
-    const voice = synth.getVoices().find(v => v.lang && v.lang.toLowerCase().startsWith(lang));
+    const voice = chosenVoice();
     if (voice) u.voice = voice;
-    u.rate = 0.9;
+    u.rate = voicePrefs.rate;
+    u.pitch = 1.05;
     synth.speak(u);
   } catch {}
 }
+
+// iPhones only let a page speak after a tap; a silent utterance during the tap unlocks later auto-read.
+function unlockSpeech() {
+  if (!canSpeak || !voicePrefs.auto) return;
+  try { const u = new SpeechSynthesisUtterance(""); u.volume = 0; window.speechSynthesis.speak(u); } catch {}
+}
+
+function renderVoicePanel() {
+  const panel = $("voice-panel");
+  if (panel.hidden) return;
+  panel.replaceChildren();
+  const inner = el("div", "panel-inner");
+  const L = LANGS[lang];
+  inner.append(el("div", "eyebrow", `${L.name} voice`));
+  if (!canSpeak) {
+    inner.append(el("p", "hint", "This browser can't read text aloud."));
+    panel.append(inner); return;
+  }
+  const list = voicesFor();
+  if (!list.length) {
+    inner.append(el("p", "hint", `No ${L.name} voice is installed on this device yet. See the tip below to add one.`));
+  } else {
+    const row = el("div", "panel-row");
+    const sel = el("select"); sel.id = "voice-select"; sel.setAttribute("aria-label", "Voice");
+    const current = chosenVoice();
+    list.forEach((v, i) => {
+      const o = el("option", null, v.name + (i === 0 ? "  ★ best match" : ""));
+      o.value = v.voiceURI; if (current && v.voiceURI === current.voiceURI) o.selected = true;
+      sel.append(o);
+    });
+    sel.onchange = () => store.set("tt:voice:" + lang, sel.value);
+    const test = el("button", "ghost", "▶ Test"); test.type = "button";
+    test.onclick = () => speak(lang === "de" ? "Hallo! Schön, dass du da bist. Wollen wir ein bisschen plaudern?" : "Bonjour ! Je suis ravie de te parler. On discute un peu ?");
+    row.append(sel, test);
+    inner.append(row);
+  }
+  const rateRow = el("label", "panel-row");
+  rateRow.append(el("span", null, "Speed"));
+  const rate = el("input"); rate.type = "range"; rate.id = "voice-rate"; rate.min = "0.7"; rate.max = "1.15"; rate.step = "0.05"; rate.value = String(voicePrefs.rate);
+  rate.oninput = () => { voicePrefs.rate = Number(rate.value); store.set("tt:rate", voicePrefs.rate); };
+  rateRow.append(rate);
+  inner.append(rateRow);
+  const autoRow = el("label", "panel-row");
+  const auto = el("input"); auto.type = "checkbox"; auto.id = "voice-auto"; auto.checked = voicePrefs.auto;
+  auto.onchange = () => { voicePrefs.auto = auto.checked; store.set("tt:auto", auto.checked); };
+  autoRow.append(auto, el("span", null, "Read every reply aloud automatically"));
+  inner.append(autoRow);
+  const tip = el("p", "hint");
+  tip.textContent = lang === "de"
+    ? "Sounds robotic? Your phone has free natural voices. iPhone: Settings → Accessibility → Spoken Content → Voices → German, download a female voice marked Enhanced or Premium (e.g. Anna or Petra). Android: Settings → Google Text-to-speech → German, install the voice data and pick a female voice. Then reopen this page."
+    : "Sounds robotic? Your phone has free natural voices. iPhone: Settings → Accessibility → Spoken Content → Voices → French, download a female voice marked Enhanced or Premium (e.g. Amélie or Audrey). Android: Settings → Google Text-to-speech → French, install the voice data and pick a female voice. Then reopen this page.";
+  inner.append(tip);
+  panel.append(inner);
+}
+if (canSpeak) window.speechSynthesis.addEventListener?.("voiceschanged", () => renderVoicePanel());
 
 function render() {
   const nearBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 120;
@@ -548,6 +652,7 @@ function renderControls() {
   const count = notebook.filter(m => m.lang === lang).length;
   $("nb").textContent = view === "notebook" ? "Back to chat" : `Notebook${count ? " · " + count : ""}`;
   $("composer").hidden = view === "notebook";
+  if ($("voice-panel").dataset.lang !== lang) { $("voice-panel").dataset.lang = lang; renderVoicePanel(); }
   input.placeholder = L.placeholder;
   const keys = $("keys");
   if (keys.dataset.lang !== lang) {
@@ -598,6 +703,7 @@ async function send(content, opening = false) {
   errorMsg = "";
   T.push({ role: "user", content });
   busy = true; pending = ""; ctl = new AbortController();
+  unlockSpeech();
   render();
   const history = T.slice(-MAX_TURNS);
   try {
@@ -607,6 +713,7 @@ async function send(content, opening = false) {
       onText: ({ text }) => { if (lang === myLang) { pending = text; render(); } }
     });
     T.push({ role: "assistant", content: text });
+    if (voicePrefs.auto && lang === myLang) speak(parse(text).body.replace(/\*\*/g, ""));
     store.set("tt:turns:" + myLang, T);
     const { fix } = parse(text);
     if (!opening && content !== "/explain" && fix && !fix.ok && fix.fixed) {
@@ -654,6 +761,13 @@ input.addEventListener("keydown", (e) => {
   }
 });
 input.addEventListener("input", () => { autosize(); renderControls(); });
+
+$("voice").addEventListener("click", () => {
+  const panel = $("voice-panel");
+  panel.hidden = !panel.hidden;
+  $("voice").setAttribute("aria-expanded", String(!panel.hidden));
+  renderVoicePanel();
+});
 
 $("nb").addEventListener("click", () => {
   view = view === "notebook" ? "chat" : "notebook";

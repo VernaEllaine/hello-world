@@ -40,5 +40,5 @@ It runs inside the Claude app (or claude.ai) on your own Claude account, so no A
 
 - **Role-play scenes**: café, bakery, directions, hotel, doctor, job interview, small talk
 - **Mistake notebook**: every correction is saved, and a review drill quizzes you on your recent mistakes
-- **Listen**: replies are read aloud in a German or French voice
-- **Speaking**: dictate with your phone keyboard's microphone
+- **Natural voice**: replies are read aloud using the most natural female voice on your device (pick another under **Voice**, plus speed and auto-read). Download a free Enhanced/Premium voice on your phone for the best sound; the Voice panel explains how.
+- **Speaking**: dictate with your phone keyboard's microphone. For real spoken conversation, use Claude voice mode with the instructions in [`voice-mode-tutor.md`](voice-mode-tutor.md).
