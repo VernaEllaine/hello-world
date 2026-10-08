@@ -696,7 +696,7 @@ function chosenVoice() {
   return list.find(v => v.voiceURI === saved) || list[0] || null;
 }
 
-const voicePrefs = { rate: store.get("tt:rate", 0.95), auto: store.get("tt:auto", false) };
+const voicePrefs = { rate: store.get("tt:rate", 0.95), auto: store.get("tt:auto", false), volume: store.get("tt:volume", 1) };
 
 let speakId = 0;
 function speak(text, onEnd) {
@@ -705,7 +705,8 @@ function speak(text, onEnd) {
   if (cloudVoiceOn()) {
     speakCloud(text, id).then(r => { if (r === "ok") done(); }).catch((e) => {
       if (id !== speakId) return;
-      errorMsg = e && e.status === 401 ? "The ElevenLabs key didn't work, so the phone voice is reading instead."
+      errorMsg = e && e.status === -1 ? "Your phone paused the natural voice. Tap anywhere to bring it back; the phone voice read this one."
+        : e && e.status === 401 ? "The ElevenLabs key didn't work, so the phone voice is reading instead."
         : e && (e.status === 402 || e.status === 429) ? "Your ElevenLabs allowance is used up for now, so the phone voice is reading instead."
         : "The natural voice couldn't load, so the phone voice is reading instead.";
       render();
@@ -745,6 +746,9 @@ async function speakCloud(text, id) {
   player.src = playerUrl;
   player.preservesPitch = true;
   player.playbackRate = voicePrefs.rate;
+  applyVolume();
+  if (audioCtx && audioCtx.state !== "running") { try { await audioCtx.resume(); } catch {} }
+  if (audioCtx && audioCtx.state !== "running") throw { status: -1 };   // paused by the phone: read with the phone voice instead
   await new Promise((resolve, reject) => {
     player.finish = () => { player.finish = null; resolve(); };
     player.onended = () => player.finish && player.finish();
@@ -764,7 +768,34 @@ function silentWav() {
   v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, "data"); v.setUint32(40, n * 2, true);
   return URL.createObjectURL(new Blob([b], { type: "audio/wav" }));
 }
+// Volume for the natural voice goes through Web Audio: iPhones ignore an audio element's
+// own volume setting. This also allows a small boost above 100%.
+let audioCtx = null, gainNode = null;
+function setupGain() {
+  if (!player || gainNode) return;
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    audioCtx = new Ctx();
+    gainNode = audioCtx.createGain();
+    audioCtx.createMediaElementSource(player).connect(gainNode).connect(audioCtx.destination);
+  } catch { audioCtx = null; gainNode = null; }
+  applyVolume();
+}
+function applyVolume() {
+  if (!player) return;
+  if (gainNode) { gainNode.gain.value = voicePrefs.volume; player.volume = 1; }
+  else player.volume = Math.min(1, voicePrefs.volume);
+}
+
+// Any tap wakes the audio engine back up after the phone pauses it (e.g. after switching apps)
+if (player) ["touchend", "click"].forEach(ev => document.addEventListener(ev, () => {
+  if (audioCtx && audioCtx.state !== "running") { try { audioCtx.resume(); } catch {} }
+}, { passive: true }));
+
 function unlockAudio() {
+  setupGain();
+  if (audioCtx && audioCtx.state === "suspended") { try { audioCtx.resume(); } catch {} }
   if (!player || player.dataset.unlocked) return;
   try { player.src = silentWav(); const p = player.play(); if (p) p.then(() => { player.dataset.unlocked = "1"; }).catch(() => {}); } catch {}
 }
@@ -795,6 +826,7 @@ function speakDevice(text, done) {
     const voice = chosenVoice();
     if (voice) u.voice = voice;
     u.rate = voicePrefs.rate;
+    u.volume = Math.min(1, voicePrefs.volume);
     u.pitch = 1.05;
     u.onend = done;
     u.onerror = done;
@@ -905,6 +937,21 @@ function renderVoicePanel() {
     row.append(sel, test);
     inner.append(row);
   }
+  const volRow = el("label", "panel-row");
+  volRow.append(el("span", null, "Volume"));
+  const vol = el("input"); vol.type = "range"; vol.id = "voice-volume";
+  vol.min = "0.1"; vol.max = player ? "1.5" : "1"; vol.step = "0.05"; vol.value = String(Math.min(Number(vol.max), voicePrefs.volume));
+  vol.setAttribute("aria-label", "Voice volume");
+  const volPct = el("span", "hint", Math.round(Number(vol.value) * 100) + "%");
+  volPct.style.cssText = "min-width:3.2em;text-align:right;font-variant-numeric:tabular-nums";
+  vol.oninput = () => {
+    voicePrefs.volume = Number(vol.value); store.set("tt:volume", voicePrefs.volume);
+    volPct.textContent = Math.round(voicePrefs.volume * 100) + "%";
+    applyVolume();
+  };
+  vol.onchange = () => { unlockAudio(); speak(lang === "de" ? "So laut bin ich jetzt." : "Voilà mon volume."); };
+  volRow.append(vol, volPct);
+  inner.append(volRow);
   const rateRow = el("label", "panel-row");
   rateRow.append(el("span", null, "Speed"));
   const rate = el("input"); rate.type = "range"; rate.id = "voice-rate"; rate.min = "0.7"; rate.max = "1.15"; rate.step = "0.05"; rate.value = String(voicePrefs.rate);
