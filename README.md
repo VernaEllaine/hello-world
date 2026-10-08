@@ -42,3 +42,14 @@ It runs inside the Claude app (or claude.ai) on your own Claude account, so no A
 - **Mistake notebook**: every correction is saved, and a review drill quizzes you on your recent mistakes
 - **Natural voice**: replies are read aloud using the most natural female voice on your device (pick another under **Voice**, plus speed and auto-read). Download a free Enhanced/Premium voice on your phone for the best sound; the Voice panel explains how.
 - **Speaking**: dictate with your phone keyboard's microphone. For real spoken conversation, use Claude voice mode with the instructions in [`voice-mode-tutor.md`](voice-mode-tutor.md).
+
+### With a microphone (GitHub Pages)
+
+Claude artifacts can't use the microphone, so the same page is also published as a standalone site from `docs/index.html` (regenerate it with `python web/build_pages.py` after editing `web/tutor.html`). There it gets:
+
+- **Mic button**: tap, speak, and your answer is sent when you pause
+- **Hands-free**: the tutor reads her reply aloud, then listens for yours, like a normal conversation
+
+The standalone site calls the Claude API with your own API key (from console.anthropic.com), which is saved only in your browser. Usage is billed to your API account.
+
+To put it online: repository **Settings → Pages → Build and deployment → Deploy from a branch**, pick the branch and the `/docs` folder. It will be at `https://vernaellaine.github.io/hello-world/`.
