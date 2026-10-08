@@ -251,6 +251,9 @@ textarea:focus-visible { outline: none; }
 </footer>
 
 <script>
+// Inside Claude the page talks to Claude through the viewer's account; on its own site it uses an API key.
+const IN_CLAUDE = !!window.claude;
+
 const LANGS = {
   de: {
     name: "German", native: "Deutsch",
@@ -318,7 +321,7 @@ For every learner message, start with a <fix> block:
 ✓
 </fix>
 - If the learner wrote in English, put the ${L.name} version on the "=" line and one note saying how they could have said it.
-Only correct real mistakes. Ignore missing capital letters at the start and missing final punctuation.
+Only correct real mistakes, and be sure before you call something wrong. If the learner's version is grammatical and a native speaker would accept it, it is NOT a mistake: write the ✓ block, and if a different wording is more common, mention it only as a Tip. Double-check prepositions with places before correcting them (for example German "auf/von den Philippinen", "in die/aus der Schweiz"; French "aux/des Philippines", "en/de France"). Ignore missing capital letters at the start and missing final punctuation, and ignore likely speech-to-text slips.
 
 After the </fix> block, continue the conversation in ${L.name}: react to what they said, share a little, and end with a question. Keep it to 2-4 short sentences, pitched at level ${level}: slightly challenging but understandable. No headings, no lists, plain sentences.
 
@@ -680,6 +683,90 @@ let speakId = 0;
 function speak(text, onEnd) {
   const id = ++speakId;
   const done = () => { if (id === speakId && onEnd) onEnd(); };
+  if (cloudVoiceOn()) {
+    speakCloud(text, id).then(r => { if (r === "ok") done(); }).catch((e) => {
+      if (id !== speakId) return;
+      errorMsg = e && e.status === 401 ? "The ElevenLabs key didn't work, so the phone voice is reading instead."
+        : e && (e.status === 402 || e.status === 429) ? "Your ElevenLabs allowance is used up for now, so the phone voice is reading instead."
+        : "The natural voice couldn't load, so the phone voice is reading instead.";
+      render();
+      speakDevice(text, done);
+    });
+    return;
+  }
+  speakDevice(text, done);
+}
+
+function stopSpeaking() {
+  speakId++;                                            // stale callbacks are ignored
+  try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch {}
+  if (player) { try { player.pause(); } catch {} if (player.finish) player.finish(); }
+}
+
+// ---------- natural cloud voice (ElevenLabs, only on the standalone site) ----------
+const EL_DEFAULT_VOICE = "EXAVITQu4vr4xnSDxMaL";
+let elKey = IN_CLAUDE ? "" : store.get("tt:elkey", "");
+let elVoices = null;                                    // the account's voices, once loaded
+const player = IN_CLAUDE ? null : new Audio();
+let playerUrl = null;
+const cloudVoiceOn = () => !!(player && elKey);
+const elVoiceFor = (l) => store.get("tt:elvoice:" + l, EL_DEFAULT_VOICE);
+
+async function speakCloud(text, id) {
+  const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(elVoiceFor(lang))}?output_format=mp3_44100_128`, {
+    method: "POST",
+    headers: { "xi-api-key": elKey, "Content-Type": "application/json", Accept: "audio/mpeg" },
+    body: JSON.stringify({ text, model_id: "eleven_multilingual_v2" })
+  });
+  if (!res.ok) throw { status: res.status };
+  const blob = await res.blob();
+  if (id !== speakId) return "stale";
+  if (playerUrl) URL.revokeObjectURL(playerUrl);
+  playerUrl = URL.createObjectURL(blob);
+  player.src = playerUrl;
+  player.preservesPitch = true;
+  player.playbackRate = voicePrefs.rate;
+  await new Promise((resolve, reject) => {
+    player.finish = () => { player.finish = null; resolve(); };
+    player.onended = () => player.finish && player.finish();
+    player.onerror = () => { player.finish = null; reject({ status: 0 }); };
+    player.play().catch(() => { player.finish = null; reject({ status: 0 }); });
+  });
+  return id === speakId ? "ok" : "stale";
+}
+
+// Phones only play sound that starts from a tap. Playing a tiny silent clip during a tap
+// lets later replies play by themselves.
+function silentWav() {
+  const rate = 8000, n = 400, b = new ArrayBuffer(44 + n * 2), v = new DataView(b);
+  const w = (o, str) => { for (let i = 0; i < str.length; i++) v.setUint8(o + i, str.charCodeAt(i)); };
+  w(0, "RIFF"); v.setUint32(4, 36 + n * 2, true); w(8, "WAVE"); w(12, "fmt "); v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true);
+  v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, "data"); v.setUint32(40, n * 2, true);
+  return URL.createObjectURL(new Blob([b], { type: "audio/wav" }));
+}
+function unlockAudio() {
+  if (!player || player.dataset.unlocked) return;
+  try { player.src = silentWav(); const p = player.play(); if (p) p.then(() => { player.dataset.unlocked = "1"; }).catch(() => {}); } catch {}
+}
+
+async function loadElVoices() {
+  if (!elKey) return;
+  try {
+    const res = await fetch("https://api.elevenlabs.io/v1/voices", { headers: { "xi-api-key": elKey } });
+    if (!res.ok) throw { status: res.status };
+    const data = await res.json();
+    elVoices = (data.voices || []).map(v => ({ id: v.voice_id, name: v.name, gender: (v.labels && v.labels.gender) || "", accent: (v.labels && v.labels.accent) || "" }))
+      .sort((a, b) => (b.gender === "female") - (a.gender === "female") || a.name.localeCompare(b.name));
+  } catch (e) {
+    elVoices = [];
+    errorMsg = e && e.status === 401 ? "That ElevenLabs key didn't work. Check it in the voice settings." : "Couldn't load your ElevenLabs voices.";
+    render();
+  }
+  renderVoicePanel();
+}
+
+function speakDevice(text, done) {
   if (!canSpeak) { done(); return; }
   try {
     const synth = window.speechSynthesis;
@@ -698,8 +785,59 @@ function speak(text, onEnd) {
 
 // iPhones only let a page speak after a tap; a silent utterance during the tap unlocks later auto-read.
 function unlockSpeech() {
+  unlockAudio();
   if (!canSpeak || !(voicePrefs.auto || handsFree)) return;
   try { const u = new SpeechSynthesisUtterance(""); u.volume = 0; window.speechSynthesis.speak(u); } catch {}
+}
+
+function naturalVoiceSection() {
+  const L = LANGS[lang];
+  const out = [el("div", "eyebrow", "Natural voice")];
+  if (!elKey) {
+    const p = el("p", "hint");
+    const a = el("a", null, "elevenlabs.io"); a.href = "https://elevenlabs.io/app/settings/api-keys"; a.target = "_blank"; a.rel = "noopener";
+    p.append("For a voice that sounds like a real person, create a free account at ", a, ", copy your API key, and paste it here. The free plan includes a monthly allowance of speech.");
+    out.push(p);
+  }
+  const f = el("form", "keyform");
+  const row = el("div", "panel-row");
+  const inp = el("input"); inp.type = "password"; inp.id = "el-key"; inp.placeholder = "ElevenLabs API key"; inp.autocomplete = "off"; inp.value = elKey;
+  inp.setAttribute("aria-label", "ElevenLabs API key");
+  const save = el("button", "ghost", elKey ? "Update" : "Save"); save.type = "submit";
+  row.append(inp, save);
+  f.append(row);
+  f.onsubmit = (e) => {
+    e.preventDefault();
+    elKey = inp.value.trim(); store.set("tt:elkey", elKey);
+    elVoices = null; errorMsg = "";
+    renderVoicePanel(); render();
+    if (elKey) loadElVoices();
+  };
+  out.push(f);
+  if (elKey) {
+    const vrow = el("div", "panel-row");
+    const sel = el("select"); sel.id = "el-voice"; sel.setAttribute("aria-label", "Natural voice");
+    const current = elVoiceFor(lang);
+    if (!elVoices) { sel.append(el("option", null, "Loading voices…")); sel.disabled = true; if (elVoices === null) loadElVoices(); }
+    else {
+      const list = elVoices.length ? elVoices : [{ id: EL_DEFAULT_VOICE, name: "Sarah", gender: "female", accent: "" }];
+      list.forEach(v => {
+        const o = el("option", null, v.name + (v.gender ? " · " + v.gender : "") + (v.accent ? " · " + v.accent : ""));
+        o.value = v.id; o.selected = v.id === current; sel.append(o);
+      });
+    }
+    sel.onchange = () => store.set("tt:elvoice:" + lang, sel.value);
+    const test = el("button", "ghost", "▶ Test"); test.type = "button";
+    test.onclick = () => { unlockAudio(); speak(lang === "de" ? "Hallo! Schön, dass du da bist. Wollen wir ein bisschen plaudern?" : "Bonjour ! Je suis ravie de te parler. On discute un peu ?"); };
+    vrow.append(sel, test);
+    out.push(vrow);
+    const remove = el("button", "link", "Remove key and use the phone voice");
+    remove.type = "button"; remove.style.alignSelf = "flex-start";
+    remove.onclick = () => { elKey = ""; store.set("tt:elkey", ""); elVoices = null; renderVoicePanel(); };
+    out.push(remove);
+    out.push(el("p", "hint", `The same voice speaks ${L.name} natively. Pick one per language.`));
+  }
+  return out;
 }
 
 function renderVoicePanel() {
@@ -712,7 +850,20 @@ function renderVoicePanel() {
     inner.append(el("div", "eyebrow", "Claude API key"));
     inner.append(keyForm());
   }
-  inner.append(el("div", "eyebrow", `${L.name} voice`));
+  if (player) inner.append(...naturalVoiceSection());
+  if (canListen) {
+    inner.append(el("div", "eyebrow", "Hands-free"));
+    const row = el("label", "panel-row");
+    row.append(el("span", null, "Send after a pause of"));
+    const sel = el("select"); sel.id = "pause-select";
+    [["short", "1.5 seconds"], ["normal", "3 seconds"], ["long", "5 seconds"]].forEach(([k, label]) => {
+      const o = el("option", null, label); o.value = k; o.selected = k === pauseKey; sel.append(o);
+    });
+    sel.onchange = () => { pauseKey = sel.value; store.set("tt:pause", pauseKey); };
+    row.append(sel);
+    inner.append(row);
+  }
+  inner.append(el("div", "eyebrow", cloudVoiceOn() ? "Phone voice (backup)" : `${L.name} voice`));
   if (!canSpeak) {
     inner.append(el("p", "hint", "This browser can't read text aloud."));
     panel.append(inner); return;
@@ -817,14 +968,14 @@ function renderControls() {
   const started = turns[lang].length > 0;
   const ready = sampleState === "ready";
   input.disabled = !started || !ready || listening;
-  if (listening) input.placeholder = "Listening…";
+  if (listening) input.placeholder = "Listening… pause when you're done";
   $("handsfree").hidden = !canListen;
   $("handsfree").setAttribute("aria-pressed", String(handsFree));
   sendBtn.parentElement.classList.toggle("live", listening);
   sendBtn.classList.toggle("live", listening);
   const MIC = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>';
   if (listening) {
-    sendBtn.classList.remove("stop"); sendBtn.disabled = false; sendBtn.setAttribute("aria-label", "Stop and send");
+    sendBtn.classList.remove("stop"); sendBtn.disabled = false; sendBtn.setAttribute("aria-label", "Send now");
     sendBtn.innerHTML = MIC;
   } else if (!busy && canListen && !input.value.trim()) {
     sendBtn.classList.remove("stop"); sendBtn.setAttribute("aria-label", "Speak your answer");
@@ -868,7 +1019,6 @@ ERRORS.bad_request = "Claude couldn't process that request. Start a new chat and
 // ---------- backends ----------
 // Inside Claude the page asks Claude through the viewer's own account (`sample`).
 // Opened on its own web address (GitHub Pages), it calls the Claude API with the learner's key.
-const IN_CLAUDE = !!window.claude;
 const MODEL = "claude-opus-5-5";
 const SDK_URL = "https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@0.126.0/+esm";
 const MIC_APP_URL = "https://vernaellaine.github.io/hello-world/";
@@ -894,7 +1044,7 @@ async function ask({ system, turns: msgs, prompt }, { onText, signal } = {}) {
       ...(system ? { system } : {}),
       messages,
       thinking: { type: "adaptive" },
-      output_config: { effort: "low" },
+      output_config: { effort: "medium" },     // enough thinking to keep corrections accurate
       // If a reply is declined by a safety classifier, retry it on Anthropic's recommended fallback model.
       betas: ["server-side-fallback-2026-07-01"],
       fallbacks: "default",
@@ -925,7 +1075,7 @@ function keyForm() {
   row.append(inp, save);
   const p = el("p", "hint");
   const a = el("a", null, "console.anthropic.com"); a.href = "https://console.anthropic.com/settings/keys"; a.target = "_blank"; a.rel = "noopener";
-  p.append("Get a key at ", a, ". It's saved only on this device and sent only to Anthropic. Usage is billed to your API account, roughly 1–2 cents per message.");
+  p.append("Get a key at ", a, ". It's saved only on this device and sent only to Anthropic. Usage is billed to your API account, roughly 1–3 cents per message.");
   f.append(row, p);
   f.onsubmit = (e) => {
     e.preventDefault();
@@ -944,49 +1094,109 @@ const canListen = !!SR;
 let rec = null, listening = false;
 let handsFree = canListen && store.get("tt:handsfree", false);
 
+// How long you can pause before your answer is sent
+const PAUSES = { short: 1800, normal: 3000, long: 5000 };
+let pauseKey = store.get("tt:pause", "normal");
+if (!PAUSES[pauseKey]) pauseKey = "normal";
+const NOTHING_HEARD_MS = 9000;
+
+// One spoken answer can span several recognition sessions: phones end a session on their own
+// after a short pause, so we quietly restart it and only send once you've been silent for a while.
+let turn = null;
+
+function joinResults(results) {
+  const parts = [];
+  for (let i = 0; i < results.length; i++) {
+    const t = results[i][0].transcript.trim();
+    if (!t) continue;
+    const last = parts[parts.length - 1];
+    // Some Android phones repeat the whole phrase so far in each new result
+    if (last && t.toLowerCase().startsWith(last.toLowerCase())) parts[parts.length - 1] = t;
+    else if (!(last && last.toLowerCase().startsWith(t.toLowerCase()))) parts.push(t);
+  }
+  return parts.join(" ");
+}
+
+const heardSoFar = (t) => (t.committed + " " + t.current).trim();
+
+function armSilenceTimer(t) {
+  clearTimeout(t.timer);
+  t.timer = setTimeout(() => finishTurn(false), heardSoFar(t) ? PAUSES[pauseKey] : NOTHING_HEARD_MS);
+}
+
 function listen() {
   if (!canListen || listening || busy || sampleState !== "ready") return;
-  speakId++;                                            // don't let a cancelled utterance re-trigger listening
-  try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch {}
-  const r = new SR();
-  r.lang = lang === "de" ? "de-DE" : "fr-FR";
-  r.interimResults = true;
-  r.continuous = false;
-  r.maxAlternatives = 1;
-  let finalText = "";
+  stopSpeaking();
+  const t = { committed: "", current: "", timer: null, done: false, cancelled: false, fatal: false, quickEnds: 0 };
+  turn = t;
   input.value = "";
-  r.onresult = (e) => {
-    let interim = "";
-    for (let i = e.resultIndex; i < e.results.length; i++) {
-      if (e.results[i].isFinal) finalText += e.results[i][0].transcript;
-      else interim += e.results[i][0].transcript;
-    }
-    input.value = (finalText + interim).trim();
-    autosize();
-  };
-  r.onerror = (e) => {
-    if (e.error === "not-allowed" || e.error === "service-not-allowed") {
-      errorMsg = "Microphone access is blocked. Allow it for this site in your browser settings, then tap the mic.";
-      handsFree = false; store.set("tt:handsfree", false);
-    } else if (e.error === "no-speech") errorMsg = "I didn't hear anything. Tap the mic when you're ready.";
-    else if (e.error !== "aborted") errorMsg = "The mic stopped. Tap it to try again.";
-  };
-  r.onend = () => {
-    listening = false; rec = null;
-    const text = input.value.trim();
-    if (text && !r.cancelled) { input.value = ""; autosize(); send(text); }
-    else render();
-  };
-  rec = r; listening = true; errorMsg = "";
-  try { r.start(); } catch { listening = false; rec = null; }
+  listening = true; errorMsg = "";
+  armSilenceTimer(t);
+  startSession(t);
   render();
 }
 
-function stopListening(cancel) {
-  if (!rec) return;
-  rec.cancelled = !!cancel;
-  try { rec.stop(); } catch {}
+function startSession(t) {
+  const r = new SR();
+  r.lang = lang === "de" ? "de-DE" : "fr-FR";
+  r.interimResults = true;
+  r.continuous = true;
+  r.maxAlternatives = 1;
+  const startedAt = Date.now();
+  r.onresult = (e) => {
+    if (turn !== t) return;
+    t.current = joinResults(e.results);
+    input.value = heardSoFar(t);
+    autosize();
+    armSilenceTimer(t);
+  };
+  r.onerror = (e) => {
+    if (turn !== t) return;
+    if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+      errorMsg = "Microphone access is blocked. Allow it for this site in your browser settings, then tap the mic.";
+      handsFree = false; store.set("tt:handsfree", false);
+      t.fatal = true;
+    } else if (e.error === "network") {
+      errorMsg = "Speech recognition needs an internet connection.";
+      t.fatal = true;
+    }
+    // "no-speech" and "aborted" are normal here: the session just restarts
+  };
+  r.onend = () => {
+    if (turn !== t) return;
+    rec = null;
+    t.committed = heardSoFar(t); t.current = "";
+    if (t.done || t.fatal) { finalizeTurn(t); return; }
+    // A session that keeps dying straight away means the mic isn't really available
+    t.quickEnds = Date.now() - startedAt < 400 ? t.quickEnds + 1 : 0;
+    if (t.quickEnds >= 4) { errorMsg = "The mic keeps stopping. Tap it to try again."; t.fatal = true; finalizeTurn(t); return; }
+    setTimeout(() => { if (turn === t && !t.done) startSession(t); }, 60);
+  };
+  rec = r;
+  try { r.start(); } catch { t.fatal = true; finalizeTurn(t); }
 }
+
+function finishTurn(cancel) {
+  const t = turn;
+  if (!t || t.done) return;
+  t.done = true; t.cancelled = !!cancel;
+  clearTimeout(t.timer);
+  if (rec) { try { rec.stop(); } catch { finalizeTurn(t); } }   // onend delivers the last words, then finalizes
+  else finalizeTurn(t);
+}
+
+function finalizeTurn(t) {
+  if (turn !== t) return;
+  clearTimeout(t.timer);
+  turn = null; rec = null; listening = false;
+  const text = heardSoFar(t);
+  input.value = ""; autosize();
+  if (text && !t.cancelled) { send(text); return; }
+  if (!text && !t.cancelled && !t.fatal) errorMsg = "I didn't hear anything. Tap the mic when you're ready.";
+  render();
+}
+
+function stopListening(cancel) { finishTurn(cancel); }
 
 async function send(content, opening = false) {
   if (busy || !(sample || apiClient)) return;
@@ -1048,7 +1258,7 @@ $("composer").addEventListener("submit", (e) => {
   if (busy) { ctl?.abort(); return; }
   if (listening) { stopListening(false); return; }
   const text = input.value.trim();
-  if (!text) { listen(); return; }
+  if (!text) { unlockAudio(); listen(); return; }
   input.value = ""; autosize();
   send(text);
 });

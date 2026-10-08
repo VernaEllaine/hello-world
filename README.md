@@ -49,6 +49,8 @@ Claude artifacts can't use the microphone, so the same page is also published as
 
 - **Mic button**: tap, speak, and your answer is sent when you pause
 - **Hands-free**: the tutor reads her reply aloud, then listens for yours, like a normal conversation
+- **Pauses are fine**: your answer is sent only after you've been quiet for a moment (1.5, 3 or 5 seconds, set under the speaker icon); tap the mic button to send right away
+- **Natural voice** (optional): paste an ElevenLabs API key under the speaker icon for a human-sounding voice; the phone's voice is the fallback
 
 The standalone site calls the Claude API with your own API key (from console.anthropic.com), which is saved only in your browser. Usage is billed to your API account.
 
