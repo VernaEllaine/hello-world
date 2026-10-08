@@ -250,8 +250,8 @@ textarea:focus-visible { outline: none; }
     <select id="level" class="level" aria-label="Your level">
       <option>A1</option><option selected>A2</option><option>B1</option><option>B2</option><option>C1</option><option>C2</option>
     </select>
-    <button id="voice" class="icon-btn" type="button" aria-expanded="false" aria-controls="voice-panel" aria-label="Voice settings">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>
+    <button id="voice" class="icon-btn" type="button" aria-expanded="false" aria-controls="voice-panel" aria-label="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
     </button>
     <button id="nb" class="icon-btn" type="button" aria-label="Mistakes">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-6-4-6 4V3z"/></svg>
@@ -745,6 +745,7 @@ function stopSpeaking() {
   speakId++;                                            // stale callbacks are ignored
   try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch {}
   if (player) { try { player.pause(); } catch {} if (player.finish) player.finish(); }
+  if (currentSource) { const src = currentSource; currentSource = null; try { src.stop(); } catch {} }
 }
 
 // ---------- natural cloud voice (ElevenLabs, only on the standalone site) ----------
@@ -756,23 +757,50 @@ let playerUrl = null;
 const cloudVoiceOn = () => !!(player && elKey);
 const elVoiceFor = (l) => store.get("tt:elvoice:" + l, EL_DEFAULT_VOICE);
 
-async function speakCloud(text, id) {
-  const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(elVoiceFor(lang))}?output_format=mp3_44100_128`, {
+// ElevenLabs makes the speech at the chosen speed itself. Slowing audio down on the phone
+// (time-stretching) is what made it sound choppy.
+let elSpeedOk = true;
+function ttsRequest(text, withSpeed) {
+  const body = { text, model_id: "eleven_multilingual_v2" };
+  if (withSpeed) body.voice_settings = { stability: 0.5, similarity_boost: 0.75, speed: Math.min(1.2, Math.max(0.7, voicePrefs.rate)) };
+  return fetch(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(elVoiceFor(lang))}?output_format=mp3_44100_128`, {
     method: "POST",
     headers: { "xi-api-key": elKey, "Content-Type": "application/json", Accept: "audio/mpeg" },
-    body: JSON.stringify({ text, model_id: "eleven_multilingual_v2" })
+    body: JSON.stringify(body)
   });
+}
+
+let currentSource = null;
+async function speakCloud(text, id) {
+  let res = await ttsRequest(text, elSpeedOk);
+  if (elSpeedOk && (res.status === 400 || res.status === 422)) { elSpeedOk = false; res = await ttsRequest(text, false); }
   if (!res.ok) throw { status: res.status };
-  const blob = await res.blob();
+  const data = await res.arrayBuffer();
   if (id !== speakId) return "stale";
+
+  // Preferred: decode the whole clip and play it as one buffer through the volume control
+  if (audioCtx && gainNode) {
+    if (audioCtx.state !== "running") { try { await audioCtx.resume(); } catch {} }
+    if (audioCtx.state !== "running") throw { status: -1 };   // paused by the phone: read with the phone voice instead
+    const clip = await new Promise((resolve, reject) => audioCtx.decodeAudioData(data, resolve, () => reject({ status: 0 })));
+    if (id !== speakId) return "stale";
+    await new Promise((resolve) => {
+      const src = audioCtx.createBufferSource();
+      src.buffer = clip;
+      src.connect(gainNode);
+      src.onended = () => { if (currentSource === src) currentSource = null; resolve(); };
+      currentSource = src;
+      src.start();
+    });
+    return id === speakId ? "ok" : "stale";
+  }
+
+  // Fallback without Web Audio: a plain audio element at normal speed
   if (playerUrl) URL.revokeObjectURL(playerUrl);
-  playerUrl = URL.createObjectURL(blob);
+  playerUrl = URL.createObjectURL(new Blob([data], { type: "audio/mpeg" }));
   player.src = playerUrl;
-  player.preservesPitch = true;
-  player.playbackRate = voicePrefs.rate;
-  applyVolume();
-  if (audioCtx && audioCtx.state !== "running") { try { await audioCtx.resume(); } catch {} }
-  if (audioCtx && audioCtx.state !== "running") throw { status: -1 };   // paused by the phone: read with the phone voice instead
+  player.playbackRate = 1;
+  player.volume = Math.min(1, voicePrefs.volume);
   await new Promise((resolve, reject) => {
     player.finish = () => { player.finish = null; resolve(); };
     player.onended = () => player.finish && player.finish();
@@ -792,24 +820,24 @@ function silentWav() {
   v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, "data"); v.setUint32(40, n * 2, true);
   return URL.createObjectURL(new Blob([b], { type: "audio/wav" }));
 }
-// Volume for the natural voice goes through Web Audio: iPhones ignore an audio element's
-// own volume setting. This also allows a small boost above 100%.
+// The natural voice plays through Web Audio: iPhones ignore an audio element's own volume
+// setting, and a decoded clip plays smoothly. This also allows a small boost above 100%.
 let audioCtx = null, gainNode = null;
 function setupGain() {
   if (!player || gainNode) return;
   try {
     const Ctx = window.AudioContext || window.webkitAudioContext;
     if (!Ctx) return;
-    audioCtx = new Ctx();
+    audioCtx = new Ctx({ latencyHint: "playback" });
     gainNode = audioCtx.createGain();
-    audioCtx.createMediaElementSource(player).connect(gainNode).connect(audioCtx.destination);
+    gainNode.connect(audioCtx.destination);
   } catch { audioCtx = null; gainNode = null; }
   applyVolume();
 }
 function applyVolume() {
   if (!player) return;
-  if (gainNode) { gainNode.gain.value = voicePrefs.volume; player.volume = 1; }
-  else player.volume = Math.min(1, voicePrefs.volume);
+  if (gainNode) gainNode.gain.value = voicePrefs.volume;
+  player.volume = Math.min(1, voicePrefs.volume);
 }
 
 // Any tap wakes the audio engine back up after the phone pauses it (e.g. after switching apps)
@@ -819,7 +847,12 @@ if (player) ["touchend", "click"].forEach(ev => document.addEventListener(ev, ()
 
 function unlockAudio() {
   setupGain();
-  if (audioCtx && audioCtx.state === "suspended") { try { audioCtx.resume(); } catch {} }
+  if (audioCtx) {
+    try {
+      if (audioCtx.state !== "running") audioCtx.resume();
+      const b = audioCtx.createBufferSource(); b.buffer = audioCtx.createBuffer(1, 1, 22050); b.connect(audioCtx.destination); b.start();
+    } catch {}
+  }
   if (!player || player.dataset.unlocked) return;
   try { player.src = silentWav(); const p = player.play(); if (p) p.then(() => { player.dataset.unlocked = "1"; }).catch(() => {}); } catch {}
 }
@@ -867,7 +900,7 @@ function unlockSpeech() {
 
 function naturalVoiceSection() {
   const L = LANGS[lang];
-  const out = [el("div", "eyebrow", "Natural voice")];
+  const out = [el("div", "eyebrow", "ElevenLabs key (natural voice)")];
   if (!elKey) {
     const p = el("p", "hint");
     const a = el("a", null, "elevenlabs.io"); a.href = "https://elevenlabs.io/app/settings/api-keys"; a.target = "_blank"; a.rel = "noopener";
@@ -922,10 +955,18 @@ function renderVoicePanel() {
   const inner = el("div", "panel-inner");
   const L = LANGS[lang];
   if (!IN_CLAUDE) {
-    inner.append(el("div", "eyebrow", "Claude API key"));
+    inner.append(el("div", "eyebrow", "Claude API key (for Lena's replies)"));
     inner.append(keyForm());
   }
   if (player) inner.append(...naturalVoiceSection());
+  else {
+    // Inside Claude the page can't reach ElevenLabs: point to the standalone site
+    inner.append(el("div", "eyebrow", "Natural voice"));
+    const p = el("p", "hint");
+    const a = el("a", null, "Tandem website"); a.href = MIC_APP_URL; a.target = "_blank"; a.rel = "noopener";
+    p.append("The ElevenLabs natural voice and the mic only work on the ", a, ". Open it in Safari, then add your ElevenLabs key under the ⚙️ settings icon.");
+    inner.append(p);
+  }
   if (canListen) {
     inner.append(el("div", "eyebrow", "Hands-free"));
     const row = el("label", "panel-row");
@@ -1104,8 +1145,8 @@ const ERRORS = {
   prompt_too_large: "The conversation got too long. Tap New chat to start fresh."
 };
 
-ERRORS.no_key = "Add your Claude API key (speaker icon at the top) to start.";
-ERRORS.bad_key = "That API key didn't work. Check it under the speaker icon at the top.";
+ERRORS.no_key = "Add your Claude API key (⚙️ settings icon at the top) to start.";
+ERRORS.bad_key = "That API key didn't work. Check it under the ⚙️ settings icon at the top.";
 ERRORS.bad_request = "Claude couldn't process that request. Start a new chat and try again.";
 
 // ---------- backends ----------
