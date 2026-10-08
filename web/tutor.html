@@ -58,7 +58,8 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 /* Header */
 header { flex: none; border-bottom: 1px solid var(--line); padding-block: 10px; padding-inline: 16px; }
 .bar { max-width: 680px; margin: 0 auto; display: flex; align-items: center; gap: 6px; }
-.brand { font-weight: 700; font-size: 17px; letter-spacing: -0.03em; margin-right: auto; }
+.brand { font-weight: 700; font-size: 17px; letter-spacing: -0.03em; margin-right: auto; border: 0; background: transparent; padding: 4px 6px 4px 0; border-radius: 8px; }
+.brand:hover { color: var(--accent); }
 .seg { display: inline-flex; background: var(--soft); border-radius: 10px; padding: 3px; }
 .seg button {
   border: 0; background: transparent; border-radius: 7px; padding: 5px 10px;
@@ -74,6 +75,7 @@ header { flex: none; border-bottom: 1px solid var(--line); padding-block: 10px; 
   display: grid; place-items: center; color: var(--ink);
 }
 .icon-btn:hover { background: var(--soft); }
+.icon-btn:disabled { opacity: 0.3; cursor: default; background: transparent; }
 .icon-btn svg { width: 19px; height: 19px; }
 .icon-btn[aria-expanded="true"], .icon-btn.on { background: var(--ink); color: var(--bg); }
 .icon-btn.armed { background: var(--del); color: #FFFFFF; }
@@ -81,7 +83,14 @@ header { flex: none; border-bottom: 1px solid var(--line); padding-block: 10px; 
   position: absolute; top: 3px; right: 3px; width: 7px; height: 7px; border-radius: 50%;
   background: var(--del); box-shadow: 0 0 0 2px var(--bg);
 }
-.note { max-width: 680px; margin: 6px auto 0; font-size: 13px; color: var(--del); }
+.confirm {
+  max-width: 680px; margin: 10px auto 0; display: flex; align-items: center; gap: 6px;
+  font-size: 14px; font-weight: 500; background: var(--soft); border-radius: 14px; padding: 8px 8px 8px 14px;
+}
+.confirm span { flex: 1; min-width: 0; }
+.confirm button { flex: none; border: 0; border-radius: 999px; padding: 7px 13px; font-size: 14px; font-weight: 600; background: var(--bg); }
+.confirm .yes { background: var(--ink); color: var(--bg); }
+.continue { border: 1px solid var(--line); background: var(--bg); border-radius: 999px; padding: 12px 20px; width: 100%; font-size: 15px; font-weight: 600; }
 
 /* Transcript */
 main { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
@@ -209,7 +218,7 @@ textarea:focus-visible { outline: none; }
 
 <header>
   <div class="bar">
-    <div class="brand">Tandem</div>
+    <button id="home" class="brand" type="button" aria-label="Tandem, main menu">Tandem</button>
     <div class="seg" role="group" aria-label="Language">
       <button id="lang-de" data-lang="de" aria-pressed="true" aria-label="German">DE</button>
       <button id="lang-fr" data-lang="fr" aria-pressed="false" aria-label="French">FR</button>
@@ -224,11 +233,15 @@ textarea:focus-visible { outline: none; }
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-6-4-6 4V3z"/></svg>
       <span class="badge" id="nb-count" hidden></span>
     </button>
-    <button id="reset" class="icon-btn" type="button" aria-label="New chat">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+    <button id="reset" class="icon-btn" type="button" aria-label="Start a new conversation">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
     </button>
   </div>
-  <div class="note" id="reset-note" hidden>Tap again to clear this chat.</div>
+  <div class="confirm" id="reset-note" role="alert" hidden>
+    <span>Start a new chat?</span>
+    <button type="button" id="reset-cancel">Cancel</button>
+    <button type="button" class="yes" id="reset-yes">New chat</button>
+  </div>
 </header>
 
 <section id="voice-panel" class="panel" hidden></section>
@@ -577,8 +590,14 @@ function welcomeNode() {
 
   const scene = SCENES.find(s => s.id === chosen) || SCENES[0];
   const go = el("div");
+  if (turns[lang].length) {
+    const cont = el("button", "continue", `Continue your chat with ${L.tutor} (${scenes[lang].label})`);
+    cont.type = "button";
+    cont.onclick = () => { view = "chat"; render(); scroller.scrollTop = scroller.scrollHeight; };
+    go.append(cont);
+  }
   go.style.cssText = "display:flex;flex-direction:column;gap:10px";
-  const start = el("button", "primary", sampleState === "absent" ? "Not available here" : sampleState === "nokey" ? "Add your API key to start" : "Start chatting");
+  const start = el("button", "primary", sampleState === "absent" ? "Not available here" : sampleState === "nokey" ? "Add your API key to start" : turns[lang].length ? `Start a new ${scene.label.toLowerCase()} chat` : "Start chatting");
   start.type = "button";
   start.disabled = busy || sampleState !== "ready";
   start.onclick = () => startChat({ label: scene.label, brief: scene.brief });
@@ -912,6 +931,7 @@ function render() {
   log.replaceChildren();
   renderControls();
   if (view === "notebook") { log.append(notebookNode()); return; }
+  if (view === "home") { log.append(welcomeNode()); return; }
   const all = pending !== null ? [...T, { role: "assistant", content: pending, streaming: true }] : T;
 
   if (all.length === 0) log.append(welcomeNode());
@@ -952,7 +972,8 @@ function renderControls() {
   $("nb").classList.toggle("on", view === "notebook");
   $("nb").setAttribute("aria-label", view === "notebook" ? "Back to chat" : `Mistake notebook, ${count} saved`);
   $("nb-count").hidden = !count;
-  $("composer").hidden = view === "notebook" || (turns[lang].length === 0 && pending === null);
+  $("composer").hidden = view !== "chat" || (turns[lang].length === 0 && pending === null);
+  $("reset").disabled = turns[lang].length === 0 && pending === null;
   if ($("voice-panel").dataset.lang !== lang) { $("voice-panel").dataset.lang = lang; renderVoicePanel(); }
   input.placeholder = L.placeholder;
   const keys = $("keys");
@@ -1296,20 +1317,34 @@ document.querySelectorAll(".seg button").forEach(b => b.addEventListener("click"
 }));
 $("level").addEventListener("change", () => store.set("tt:level", $("level").value));
 
-let armTimer = null;
-$("reset").addEventListener("click", (e) => {
-  const btn = e.currentTarget;
-  if (busy) return;
-  if (!btn.classList.contains("armed")) {
-    btn.classList.add("armed"); $("reset-note").hidden = false;
-    armTimer = setTimeout(() => { btn.classList.remove("armed"); $("reset-note").hidden = true; }, 3000);
-    return;
-  }
-  clearTimeout(armTimer);
-  btn.classList.remove("armed"); $("reset-note").hidden = true;
-  turns[lang] = []; store.set("tt:turns:" + lang, []); errorMsg = ""; view = "chat";
-  Object.keys(translations).forEach(k => { if (k.startsWith(lang + ":")) delete translations[k]; });
+// Stop whatever is in progress: a reply, the mic, the voice
+function stopEverything() {
+  if (busy) ctl?.abort();
+  stopListening(true);
+  stopSpeaking();
+}
+
+$("home").addEventListener("click", () => {
+  stopEverything();
+  $("reset-note").hidden = true;
+  $("voice-panel").hidden = true; $("voice").setAttribute("aria-expanded", "false");
+  view = "home"; errorMsg = "";
   render();
+  scroller.scrollTop = 0;
+});
+
+$("reset").addEventListener("click", () => { $("reset-note").hidden = !$("reset-note").hidden; });
+$("reset-cancel").addEventListener("click", () => { $("reset-note").hidden = true; });
+$("reset-yes").addEventListener("click", () => {
+  $("reset-note").hidden = true;
+  stopEverything();
+  errorMsg = "";
+  // Same language and scene, fresh conversation, once any cancelled reply has finished stopping
+  const myLang = lang, t0 = Date.now();
+  (function go() {
+    if (busy && Date.now() - t0 < 3000) { setTimeout(go, 50); return; }
+    if (lang === myLang) startChat(scenes[myLang]);
+  })();
 });
 
 render();
