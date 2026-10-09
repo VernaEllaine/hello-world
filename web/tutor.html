@@ -696,16 +696,20 @@ function chosenVoice() {
   return list.find(v => v.voiceURI === saved) || list[0] || null;
 }
 
-const voicePrefs = { rate: store.get("tt:rate", 0.95), auto: store.get("tt:auto", false), volume: store.get("tt:volume", 1) };
+const voicePrefs = {
+  rate: store.get("tt:rate", 0.95), auto: store.get("tt:auto", false), volume: store.get("tt:volume", 1),
+  method: store.get("tt:method", "engine"),       // how the natural voice plays: "engine" (Web Audio) or "player" (audio element)
+  callFix: store.get("tt:callfix", false)         // switch the iPhone audio session back to playback after using the mic
+};
 
 let speakId = 0;
-// After the mic has been used, iPhones keep audio in a low-quality "call" mode, which makes
-// speech sound choppy. Safari's Audio Session API lets the page switch back to normal playback.
-// Only once the mic has been used: before that, leave the phone's default audio mode alone.
+// After the mic has been used, iPhones keep audio in a low-quality "call" mode. Safari's Audio
+// Session API can switch back to normal playback. It's an opt-in setting ("phone call" fix)
+// because it can also interrupt playback, and only applies once the mic has been used.
 let micUsed = false;
 function setAudioMode(mode) {
   if (mode === "play-and-record") micUsed = true;
-  if (!micUsed) return;
+  if (!voicePrefs.callFix || !micUsed) return;
   try { if (navigator.audioSession && navigator.audioSession.type !== mode) navigator.audioSession.type = mode; } catch {}
 }
 
@@ -766,12 +770,10 @@ async function speakCloud(text, id) {
   const data = await res.arrayBuffer();
   if (id !== speakId) return "stale";
 
-  // Two ways to play; if the first doesn't start (iPhones can block it), try the other.
-  // At 100% volume the phone's own audio player goes first; a changed volume needs Web Audio
-  // (iPhones ignore an audio element's volume).
+  // Two ways to play, in the order chosen under Settings → Sound check (audio engine by
+  // default). If the first doesn't start (iPhones can block it), the other one is tried.
   const canBuffer = !!(audioCtx && gainNode);
-  const order = canBuffer && Math.abs(voicePrefs.volume - 1) > 0.01 ? [playBuffer, playElement]
-    : canBuffer ? [playElement, playBuffer] : [playElement];
+  const order = !canBuffer ? [playElement] : voicePrefs.method === "player" ? [playElement, playBuffer] : [playBuffer, playElement];
   let lastErr = { status: 0 };
   for (const play of order) {
     try { return await play(data, id); }
@@ -956,6 +958,70 @@ function naturalVoiceSection() {
   return out;
 }
 
+// Settings → Sound check: try each way of playing on this phone, and choose one
+let testClip = null;                                    // { key, data } so repeat tests don't cost ElevenLabs credit
+async function soundTest(method, out) {
+  unlockAudio();
+  stopSpeaking();
+  const id = ++speakId;
+  const phrase = lang === "de" ? "Hallo! Kannst du mich gut hören?" : "Bonjour ! Tu m'entends bien ?";
+  const show = (t) => { out.textContent = t; };
+  if (method === "phone") {
+    if (!canSpeak) return show("This browser has no phone voice.");
+    show("Playing the iPhone voice… did you hear it?");
+    speakDevice(phrase, () => {});
+    return;
+  }
+  if (!elKey) return show("Add your ElevenLabs key above first.");
+  try {
+    const key = [elVoiceFor(lang), lang, voicePrefs.rate].join("|");
+    if (!testClip || testClip.key !== key) {
+      show("Loading the voice…");
+      const res = await ttsRequest(phrase, elSpeedOk);
+      if (!res.ok) return show(`ElevenLabs said no (error ${res.status}). Check your key and allowance.`);
+      testClip = { key, data: await res.arrayBuffer() };
+    }
+    if (id !== speakId) return;
+    if (method === "engine" && !(audioCtx && gainNode)) return show("This browser has no audio engine.");
+    show(`Playing with the ${method === "engine" ? "audio engine" : "audio player"}… did you hear it?`);
+    await (method === "engine" ? playBuffer : playElement)(testClip.data.slice(0), id);
+  } catch (e) {
+    show(e && e.status === -2 ? "Blocked: the audio player didn't start." : e && e.status === -1 ? "Blocked: the audio engine is paused by the phone. Tap anywhere and try again." : "That didn't play.");
+  }
+}
+
+function soundCheckSection() {
+  const out = [el("div", "eyebrow", "Sound check")];
+  out.push(el("p", "hint", "If you can't hear Lena, tap each test and note which ones you hear."));
+  const result = el("p", "hint"); result.id = "sound-result"; result.setAttribute("aria-live", "polite");
+  const row = el("div", "panel-row"); row.style.flexWrap = "wrap";
+  [["engine", "▶ Audio engine"], ["player", "▶ Audio player"], ["phone", "▶ iPhone voice"]].forEach(([m, label]) => {
+    const b = el("button", "ghost", label); b.type = "button"; b.id = "test-" + m;
+    b.onclick = () => soundTest(m, result);
+    row.append(b);
+  });
+  out.push(row, result);
+
+  const mrow = el("label", "panel-row");
+  mrow.append(el("span", null, "Natural voice plays with"));
+  const sel = el("select"); sel.id = "play-method";
+  [["engine", "Audio engine"], ["player", "Audio player"]].forEach(([k, label]) => {
+    const o = el("option", null, label); o.value = k; o.selected = voicePrefs.method === k; sel.append(o);
+  });
+  sel.onchange = () => { voicePrefs.method = sel.value; store.set("tt:method", sel.value); };
+  mrow.append(sel);
+  out.push(mrow);
+
+  if (canListen) {
+    const crow = el("label", "panel-row");
+    const cb = el("input"); cb.type = "checkbox"; cb.id = "call-fix"; cb.checked = voicePrefs.callFix;
+    cb.onchange = () => { voicePrefs.callFix = cb.checked; store.set("tt:callfix", cb.checked); if (!cb.checked) { try { if (navigator.audioSession) navigator.audioSession.type = "auto"; } catch {} } };
+    crow.append(cb, el("span", null, "Fix \u201cphone call\u201d sound after using the mic (iOS 17+, experimental)"));
+    out.push(crow);
+  }
+  return out;
+}
+
 function renderVoicePanel() {
   const panel = $("voice-panel");
   if (panel.hidden) return;
@@ -966,7 +1032,7 @@ function renderVoicePanel() {
     inner.append(el("div", "eyebrow", "Claude API key (for Lena's replies)"));
     inner.append(keyForm());
   }
-  if (player) inner.append(...naturalVoiceSection());
+  if (player) inner.append(...naturalVoiceSection(), ...soundCheckSection());
   else {
     // Inside Claude the page can't reach ElevenLabs: point to the standalone site
     inner.append(el("div", "eyebrow", "Natural voice"));
