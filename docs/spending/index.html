@@ -217,7 +217,7 @@ const todayStr=`${NOW_Y}-${pad(NOW_M+1)}-${pad(now.getDate())}`;
 const DATE_RE=/^\d{4}-\d\d-\d\d$/;
 
 const cache=store.get("spend:cache",{entries:[],min:600,max:800,sheetUrl:""});
-const S={cfg:cfgStore.get(),entries:cache.entries||[],min:cache.min||600,max:cache.max||800,sheetUrl:cache.sheetUrl||"",
+const S={cfg:cfgStore.get(),entries:[],min:cache.min||600,max:cache.max||800,sheetUrl:cache.sheetUrl||"",
   year:NOW_Y,month:NOW_M,busy:false,editing:null};
 
 /* ---------- Google Sheet API ---------- */
@@ -231,8 +231,23 @@ async function api(action,data,cfg){
   if(!j.ok) throw {code:j.error||"error"};
   return j;
 }
+// Google can send a date back as "2026-11-15", as a full timestamp, or as a long date string. Bring them all to YYYY-MM-DD.
+function normDate(v){
+  const s=String(v||"").trim();
+  if(DATE_RE.test(s))return s;
+  const iso=/^(\d{4})-(\d{2})-(\d{2})T/.exec(s);
+  const d=new Date(s);
+  if(!isNaN(d)){
+    // A UTC timestamp near midnight belongs to the local calendar day.
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  }
+  if(iso)return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  const dmy=/^(\d{1,2})[./](\d{1,2})[./](\d{4})$/.exec(s);
+  if(dmy)return `${dmy[3]}-${pad(dmy[2])}-${pad(dmy[1])}`;
+  return s;
+}
 function apply(j){
-  S.entries=j.entries||[]; S.min=j.min||600; S.max=j.max||800; S.sheetUrl=j.sheetUrl||"";
+  S.entries=(j.entries||[]).map(e=>Object.assign({},e,{date:normDate(e.date),amount:Number(e.amount)||0})); S.min=j.min||600; S.max=j.max||800; S.sheetUrl=j.sheetUrl||"";
   store.set("spend:cache",{entries:S.entries,min:S.min,max:S.max,sheetUrl:S.sheetUrl});
   render();
 }
@@ -249,6 +264,7 @@ function setStatus(msg,warn){const el=$("status"); el.textContent=msg||""; el.cl
 function newId(){ return (window.crypto&&crypto.randomUUID)?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
 
 /* ---------- helpers ---------- */
+
 function parseAmount(v){
   let s=String(v).trim().replace(/[€\s]/g,"");
   if(s.includes(",")&&!s.includes("."))s=s.replace(/,/g,"."); else s=s.replace(/,/g,"");
@@ -383,6 +399,7 @@ $("overlay").addEventListener("click",e=>{if(e.target.id==="overlay")closeEdit()
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&$("overlay").classList.contains("on"))closeEdit();});
 document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible"&&S.cfg)refresh(); });
 
+S.entries=(cache.entries||[]).map(e=>Object.assign({},e,{date:normDate(e.date),amount:Number(e.amount)||0}));
 render();
 if(S.cfg)refresh();
 })();

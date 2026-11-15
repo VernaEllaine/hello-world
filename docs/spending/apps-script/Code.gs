@@ -93,7 +93,7 @@ function list_(sh) {
     .filter(r => r[0] !== '')
     .map(r => ({
       id: String(r[0]),
-      date: r[1] instanceof Date ? Utilities.formatDate(r[1], tz, 'yyyy-MM-dd') : String(r[1]),
+      date: (r[1] && typeof r[1].getTime === 'function') ? Utilities.formatDate(r[1], tz, 'yyyy-MM-dd') : String(r[1]),
       amount: Number(r[2]) || 0,
       cat: String(r[3]),
       note: String(r[4]),
