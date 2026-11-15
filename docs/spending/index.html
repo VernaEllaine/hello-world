@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Spending Tracker</title>
+<meta name="theme-color" content="#FFFFFF">
+<!-- Home Screen app: name, icon, and full-screen launch -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Spending">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Layout: a single quiet column. One big number, one bar, one input row, one list. Everything else is a text link. */
+:root{
+  --bg:#ffffff; --ink:#142120; --muted:#7a8885; --line:#e7ecea; --accent:#0e5b58;
+  --ok:#1d7548; --warn:#b07408; --bad:#b23f2c;
+  --body:"IBM Plex Sans",-apple-system,"Segoe UI",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{margin:0; background:var(--bg)}
+body{color:var(--ink); font:15px/1.5 var(--body); -webkit-font-smoothing:antialiased}
+.wrap{max-width:520px; margin:0 auto; padding:calc(24px + env(safe-area-inset-top,0px)) calc(20px + env(safe-area-inset-right,0px)) calc(48px + env(safe-area-inset-bottom,0px)) calc(20px + env(safe-area-inset-left,0px)); display:flex; flex-direction:column; gap:28px}
+button,input,select{font:inherit; color:inherit}
+button{cursor:pointer; background:none; border:0; padding:0}
+:focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:4px}
+.muted{color:var(--muted)}
+.link{color:var(--muted); font-size:13px; text-decoration:underline; text-underline-offset:3px}
+.link:hover{color:var(--ink)}
+[hidden]{display:none !important}
+
+.top{display:flex; align-items:center; justify-content:space-between}
+.nav{width:32px; height:32px; font-size:20px; color:var(--muted); border-radius:6px}
+.nav:hover{color:var(--ink)}
+#mTitle{font-size:15px; font-weight:600; margin:0}
+
+.hero{display:flex; flex-direction:column; gap:14px}
+.big{font-family:var(--mono); font-size:48px; font-weight:500; letter-spacing:-0.03em; line-height:1}
+.big.warn{color:var(--warn)} .big.bad{color:var(--bad)}
+.bar{position:relative; height:6px; background:var(--line); border-radius:3px}
+.bar .f{position:absolute; left:0; top:0; bottom:0; border-radius:3px; background:var(--ok)}
+.bar .f.warn{background:var(--warn)} .bar .f.bad{background:var(--bad)}
+.bar .m{position:absolute; top:-5px; bottom:-5px; width:1px; background:var(--ink); opacity:.5}
+.scale{position:relative; height:16px; margin-top:8px; font-size:11px; color:var(--muted)}
+.scale span{position:absolute; transform:translateX(-50%); font-family:var(--mono)}
+.line{font-size:14px; color:var(--muted)}
+.line b{color:var(--ink); font-weight:500}
+
+form.add{display:flex; flex-direction:column; gap:10px}
+.row{display:flex; gap:8px}
+.in{border:0; border-bottom:1px solid var(--line); padding:8px 2px; background:transparent; min-width:0; border-radius:0}
+.in:focus{outline:none; border-bottom-color:var(--accent)}
+#qAmt{flex:1; font-family:var(--mono); font-size:20px}
+select.in{appearance:none; -webkit-appearance:none; color:var(--ink)}
+#qCat{flex:1}
+.addbtn{background:var(--accent); color:#fff; border-radius:8px; padding:0 18px; font-weight:500}
+.addbtn:disabled{opacity:.4; cursor:not-allowed}
+.more{display:none; gap:8px} .more.on{display:flex}
+.err{color:var(--bad); font-size:13px}
+.err:empty{display:none}
+
+.list{display:flex; flex-direction:column}
+.item{display:grid; grid-template-columns:1fr auto; gap:2px 12px; padding:12px 0; border-top:1px solid var(--line); text-align:left; width:100%}
+.item:last-child{border-bottom:1px solid var(--line)}
+.item:hover{background:#fafbfb}
+.item .t{font-size:15px; grid-column:1; grid-row:1}
+.item .s{font-size:12px; color:var(--muted); grid-column:1; grid-row:2}
+.item .a{grid-column:2; grid-row:1/3; align-self:center; font-family:var(--mono); font-size:15px}
+.empty{color:var(--muted); font-size:14px; padding:8px 0}
+
+.foot{display:flex; gap:18px; flex-wrap:wrap; align-items:center}
+.status{font-size:13px; color:var(--muted)}
+.status.warn{color:var(--bad)}
+.status:empty{display:none}
+.panel{display:none; gap:12px; align-items:flex-end; flex-wrap:wrap; margin-top:14px}
+.panel.on{display:flex}
+.panel label{display:flex; flex-direction:column; font-size:12px; color:var(--muted)}
+.panel .in{font-size:15px}
+.save{color:var(--accent); font-weight:500; padding:8px 0}
+
+.setup{display:flex; flex-direction:column; gap:14px}
+.setup h1{font-size:22px; margin:0}
+.setup p{margin:0; color:var(--muted); font-size:14px}
+.setup label{display:flex; flex-direction:column; font-size:12px; color:var(--muted); gap:2px}
+.setup .in{width:100%; font-size:15px}
+.setup .addbtn{padding:10px 18px; align-self:flex-start}
+
+.overlay{position:fixed; inset:0; background:rgba(20,33,32,.25); display:none; align-items:flex-end; justify-content:center; z-index:10}
+.overlay.on{display:flex}
+.sheet{background:#fff; width:min(520px,100%); border-radius:16px 16px 0 0; padding:20px 20px calc(24px + env(safe-area-inset-bottom,0px)); display:flex; flex-direction:column; gap:12px}
+.sheet h2{font-size:15px; margin:0}
+.sheet .in{width:100%}
+.sheet-actions{display:flex; justify-content:space-between; align-items:center; margin-top:6px}
+.del{color:var(--bad); font-size:14px}
+@media (prefers-reduced-motion:no-preference){ .bar .f{transition:width .25s ease} }
+</style>
+</head>
+<body>
+<main class="wrap" id="setupView" hidden>
+  <form class="setup" id="setupForm" novalidate>
+    <h1>Connect your Google Sheet</h1>
+    <p>Your entries are saved in a Google Sheet in your Drive. Paste the web app link from the Apps Script deployment and the secret you set in the script.</p>
+    <label for="cUrl">Web app link<input class="in" id="cUrl" type="url" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+    <label for="cSecret">Secret<input class="in" id="cSecret" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+    <button class="addbtn" type="submit" id="cBtn">Connect</button>
+    <div class="err" id="cErr"></div>
+  </form>
+</main>
+
+<main class="wrap" id="appView" hidden>
+  <div class="top">
+    <button class="nav" id="prevM" type="button" aria-label="Previous month">‹</button>
+    <h1 id="mTitle">&nbsp;</h1>
+    <button class="nav" id="nextM" type="button" aria-label="Next month">›</button>
+  </div>
+
+  <section class="hero" aria-label="This month">
+    <div class="big" id="spentBig">€0.00</div>
+    <div>
+      <div class="bar" id="bar" aria-hidden="true"></div>
+      <div class="scale" id="scale" aria-hidden="true"></div>
+    </div>
+    <div class="line" id="line"></div>
+  </section>
+
+  <form class="add" id="qaForm" novalidate>
+    <div class="row">
+      <input class="in" id="qAmt" inputmode="decimal" placeholder="€0.00" aria-label="Amount in euro" autocomplete="off">
+      <button class="addbtn" id="qSave" type="submit">Add</button>
+    </div>
+    <div class="row">
+      <select class="in" id="qCat" aria-label="Category"></select>
+      <button class="link" type="button" id="moreBtn" aria-expanded="false">Date or note</button>
+    </div>
+    <div class="more" id="more">
+      <input class="in" type="date" id="qDate" aria-label="Date" style="flex:0 0 150px">
+      <input class="in" id="qNote" maxlength="120" placeholder="Note" aria-label="Note" style="flex:1">
+    </div>
+    <div class="err" id="qErr"></div>
+  </form>
+
+  <section aria-label="Entries">
+    <div class="list" id="entries"></div>
+  </section>
+
+  <footer>
+    <div class="foot">
+      <button class="link" type="button" id="setBtn" aria-expanded="false">Target and limit</button>
+      <a class="link" id="sheetLink" href="#" target="_blank" rel="noopener" hidden>Open Google Sheet</a>
+      <button class="link" type="button" id="connBtn">Connection</button>
+      <span class="status" id="status" role="status" aria-live="polite"></span>
+    </div>
+    <form class="panel" id="setForm" novalidate>
+      <label for="sMin">Minimum target<input class="in" id="sMin" inputmode="decimal" style="width:100px; font-family:var(--mono)"></label>
+      <label for="sMax">Limit<input class="in" id="sMax" inputmode="decimal" style="width:100px; font-family:var(--mono)"></label>
+      <button class="save" type="submit" id="sSave">Save</button>
+      <span class="err" id="sErr"></span>
+    </form>
+  </footer>
+</main>
+
+<div class="overlay" id="overlay" aria-hidden="true">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="dTitle">
+    <h2 id="dTitle">Edit entry</h2>
+    <input class="in" id="dAmt" inputmode="decimal" aria-label="Amount" style="font-family:var(--mono)">
+    <select class="in" id="dCat" aria-label="Category"></select>
+    <input class="in" type="date" id="dDate" aria-label="Date">
+    <input class="in" id="dNote" maxlength="120" placeholder="Note" aria-label="Note">
+    <div class="err" id="dErr"></div>
+    <div class="sheet-actions">
+      <button class="del" id="dDel" type="button">Delete</button>
+      <div style="display:flex; gap:18px; align-items:center"><button class="link" id="dCancel" type="button">Cancel</button><button class="addbtn" id="dSave" type="button" style="padding:8px 18px">Save</button></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const MONTHS_LONG=["January","February","March","April","May","June","July","August","September","October","November","December"];
+const CATS=["Groceries","Eating out","Shopping","Personal care","Transport","Fun & hobbies","Health","Gifts","Other"];
+const fmt=new Intl.NumberFormat("en-GB",{style:"currency",currency:"EUR"});
+const fmt0=new Intl.NumberFormat("en-GB",{style:"currency",currency:"EUR",maximumFractionDigits:0});
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const store={
+  get(k,d){try{const v=localStorage.getItem(k); return v?JSON.parse(v):d;}catch(e){return d;}},
+  set(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
+};
+
+const now=new Date();
+const NOW_Y=now.getFullYear(), NOW_M=now.getMonth();
+const pad=n=>String(n).padStart(2,"0");
+const todayStr=`${NOW_Y}-${pad(NOW_M+1)}-${pad(now.getDate())}`;
+const DATE_RE=/^\d{4}-\d\d-\d\d$/;
+
+const cache=store.get("spend:cache",{entries:[],min:600,max:800,sheetUrl:""});
+const S={cfg:store.get("spend:cfg",null),entries:cache.entries||[],min:cache.min||600,max:cache.max||800,sheetUrl:cache.sheetUrl||"",
+  year:NOW_Y,month:NOW_M,busy:false,editing:null};
+
+/* ---------- Google Sheet API ---------- */
+async function api(action,data,cfg){
+  cfg=cfg||S.cfg;
+  let res;
+  try{
+    res=await fetch(cfg.url,{method:"POST",body:JSON.stringify(Object.assign({action,secret:cfg.secret},data||{}))});
+  }catch(e){ throw {code:"network"}; }
+  let j; try{ j=await res.json(); }catch(e){ throw {code:"bad_response"}; }
+  if(!j.ok) throw {code:j.error||"error"};
+  return j;
+}
+function apply(j){
+  S.entries=j.entries||[]; S.min=j.min||600; S.max=j.max||800; S.sheetUrl=j.sheetUrl||"";
+  store.set("spend:cache",{entries:S.entries,min:S.min,max:S.max,sheetUrl:S.sheetUrl});
+  render();
+}
+function errText(e){
+  const c=e&&e.code;
+  if(c==="network")return "Couldn't reach Google. Check your connection and try again.";
+  if(c==="unauthorised")return "The secret doesn't match the one in the script. Check it under Connection.";
+  if(c==="no_secret_set")return "The script still has no secret. Set SECRET in the script and deploy again.";
+  if(c==="bad_response")return "The link didn't answer like the spending script. Check the web app link, and that access is set to Anyone.";
+  if(c==="not_found")return "That entry is no longer in the sheet. It may have been deleted there.";
+  return "Something went wrong saving to Google. Try again.";
+}
+function setStatus(msg,warn){const el=$("status"); el.textContent=msg||""; el.classList.toggle("warn",!!warn);}
+function newId(){ return (window.crypto&&crypto.randomUUID)?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
+
+/* ---------- helpers ---------- */
+function parseAmount(v){
+  let s=String(v).trim().replace(/[€\s]/g,"");
+  if(s.includes(",")&&!s.includes("."))s=s.replace(/,/g,"."); else s=s.replace(/,/g,"");
+  const n=Number(s); return Number.isFinite(n)?Math.round(n*100)/100:NaN;
+}
+const monthOf=e=>Number(String(e.date).slice(5,7))-1;
+const yearOf=e=>Number(String(e.date).slice(0,4));
+const inView=e=>yearOf(e)===S.year&&monthOf(e)===S.month;
+function monthTotal(y,m){return S.entries.filter(e=>yearOf(e)===y&&monthOf(e)===m).reduce((a,e)=>a+(Number(e.amount)||0),0);}
+const zoneOf=v=>v<=S.min?"ok":v<=S.max?"warn":"bad";
+const daysIn=(y,m)=>new Date(y,m+1,0).getDate();
+function defaultDate(){ return (S.year===NOW_Y&&S.month===NOW_M)?todayStr:`${S.year}-${pad(S.month+1)}-01`; }
+function catOptions(sel,value){
+  sel.innerHTML=CATS.concat(value&&!CATS.includes(value)?[value]:[]).map(c=>`<option>${esc(c)}</option>`).join("");
+  if(value)sel.value=value;
+}
+
+/* ---------- render ---------- */
+function render(){
+  const connected=!!S.cfg;
+  $("setupView").hidden=connected; $("appView").hidden=!connected;
+  if(!connected)return;
+  const y=S.year, m=S.month, spent=monthTotal(y,m), z=zoneOf(spent);
+  $("mTitle").textContent=`${MONTHS_LONG[m]} ${y}`;
+  const big=$("spentBig"); big.textContent=fmt.format(spent); big.className="big"+(z==="ok"?"":" "+z);
+  const scale=Math.max(S.max*1.12,spent), p=v=>Math.min(100,v/scale*100);
+  $("bar").innerHTML=`<div class="f ${z==="ok"?"":z}" style="width:${p(spent)}%"></div><div class="m" style="left:${p(S.min)}%"></div><div class="m" style="left:${p(S.max)}%"></div>`;
+  $("scale").innerHTML=`<span style="left:${p(S.min)}%">${fmt0.format(S.min)}</span><span style="left:${p(S.max)}%">${fmt0.format(S.max)}</span>`;
+  const rel=(y-NOW_Y)*12+(m-NOW_M);
+  const daysLeft=rel===0?daysIn(y,m)-now.getDate()+1:rel>0?daysIn(y,m):null;
+  const leftMax=S.max-spent, leftMin=S.min-spent;
+  let line;
+  if(leftMax<0) line=`<b>${fmt.format(-leftMax)}</b> over your limit`;
+  else if(leftMin>=0) line=`<b>${fmt.format(leftMin)}</b> left before your target`;
+  else line=`<b>${fmt.format(leftMax)}</b> left before your limit`;
+  if(daysLeft&&leftMax>0) line+=` · ${fmt.format((leftMin>=0?leftMin:leftMax)/daysLeft)} a day`;
+  $("line").innerHTML=line;
+
+  const list=S.entries.filter(inView).sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:(b.created||0)-(a.created||0));
+  $("entries").innerHTML=list.length?list.map(e=>`<button type="button" class="item" data-edit="${esc(e.id)}">
+      <span class="t">${esc(e.note||e.cat)}</span><span class="a">${fmt.format(e.amount)}</span>
+      <span class="s">${Number(String(e.date).slice(8,10))} ${MONTHS[monthOf(e)]} · ${esc(e.cat)}</span></button>`).join("")
+    :`<div class="empty">Nothing logged in ${MONTHS_LONG[m]} yet.</div>`;
+
+  if(!$("qCat").options.length)catOptions($("qCat"),"Groceries");
+  const key=y+"-"+m; if($("qDate").dataset.month!==key){$("qDate").value=defaultDate(); $("qDate").dataset.month=key;}
+  if(document.activeElement!==$("sMin"))$("sMin").value=S.min;
+  if(document.activeElement!==$("sMax"))$("sMax").value=S.max;
+  const sl=$("sheetLink"); sl.hidden=!S.sheetUrl; if(S.sheetUrl)sl.href=S.sheetUrl;
+}
+
+/* ---------- actions ---------- */
+async function refresh(){
+  setStatus("Syncing…");
+  try{ apply(await api("list")); setStatus(""); }
+  catch(e){ setStatus(errText(e)+(S.entries.length?" Showing what was last loaded.":""),true); }
+}
+async function quickAdd(){
+  const amount=parseAmount($("qAmt").value), date=$("qDate").value||defaultDate();
+  if(!Number.isFinite(amount)||amount===0){$("qErr").textContent="Enter an amount, e.g. 12.50. Use a minus sign for a refund."; return;}
+  if(!DATE_RE.test(date)){$("qErr").textContent="Pick a date."; return;}
+  $("qErr").textContent=""; $("qSave").disabled=true;
+  const entry={id:newId(),amount,cat:$("qCat").value,date,note:$("qNote").value.trim(),created:Date.now()};
+  // Show it straight away; the sheet confirms in the background.
+  S.entries=S.entries.concat([entry]);
+  const y=Number(date.slice(0,4)), m=Number(date.slice(5,7))-1; S.year=y; S.month=m;
+  $("qAmt").value=""; $("qNote").value=""; render(); setStatus("Saving…");
+  try{ apply(await api("add",entry)); setStatus("Saved to your sheet."); setTimeout(()=>{ if($("status").textContent==="Saved to your sheet.")setStatus(""); },2000); }
+  catch(e){ S.entries=S.entries.filter(x=>x.id!==entry.id); render(); $("qAmt").value=String(amount); $("qErr").textContent=errText(e)+" Nothing was saved."; setStatus(""); }
+  finally{ $("qSave").disabled=false; }
+}
+function openEdit(e){
+  S.editing=e;
+  $("dAmt").value=String(e.amount); catOptions($("dCat"),e.cat);
+  $("dDate").value=e.date; $("dNote").value=e.note||"";
+  $("dErr").textContent=""; const d=$("dDel"); d.textContent="Delete"; d.dataset.armed="";
+  $("overlay").classList.add("on"); $("overlay").setAttribute("aria-hidden","false"); $("dAmt").focus();
+}
+function closeEdit(){$("overlay").classList.remove("on"); $("overlay").setAttribute("aria-hidden","true"); S.editing=null;}
+async function saveEdit(){
+  const amount=parseAmount($("dAmt").value), date=$("dDate").value;
+  if(!Number.isFinite(amount)||amount===0){$("dErr").textContent="Enter an amount."; return;}
+  if(!DATE_RE.test(date)){$("dErr").textContent="Pick a date."; return;}
+  $("dSave").disabled=true;
+  try{ apply(await api("update",{id:S.editing.id,amount,cat:$("dCat").value,date,note:$("dNote").value.trim()})); closeEdit(); }
+  catch(e){ $("dErr").textContent=errText(e); }
+  finally{ $("dSave").disabled=false; }
+}
+async function delEdit(){
+  const b=$("dDel"); if(!b.dataset.armed){b.dataset.armed="1"; b.textContent="Tap again to delete"; return;}
+  try{ apply(await api("delete",{id:S.editing.id})); closeEdit(); }
+  catch(e){ $("dErr").textContent=errText(e); }
+}
+async function saveSettings(){
+  const mn=parseAmount($("sMin").value), mx=parseAmount($("sMax").value);
+  if(!Number.isFinite(mn)||!Number.isFinite(mx)||mn<=0||mx<=0){$("sErr").textContent="Enter both amounts, e.g. 600 and 800."; return;}
+  if(mn>mx){$("sErr").textContent="The target can't be higher than the limit."; return;}
+  $("sErr").textContent="";
+  try{ apply(await api("settings",{min:mn,max:mx})); setStatus("Saved."); }
+  catch(e){ $("sErr").textContent=errText(e); }
+}
+async function connect(){
+  const url=$("cUrl").value.trim(), secret=$("cSecret").value.trim();
+  if(!/^https:\/\/script\.google(usercontent)?\.com\/.+/.test(url)){$("cErr").textContent="Paste the web app link from Apps Script. It starts with https://script.google.com/macros/s/"; return;}
+  if(!secret){$("cErr").textContent="Enter the secret from the script."; return;}
+  $("cErr").textContent=""; $("cBtn").disabled=true; $("cBtn").textContent="Connecting…";
+  try{
+    const j=await api("list",null,{url,secret});
+    S.cfg={url,secret}; store.set("spend:cfg",S.cfg); apply(j);
+  }catch(e){ $("cErr").textContent=errText(e); }
+  finally{ $("cBtn").disabled=false; $("cBtn").textContent="Connect"; }
+}
+
+/* ---------- events ---------- */
+document.addEventListener("click",e=>{
+  const ed=e.target.closest("[data-edit]"); if(ed){const x=S.entries.find(y=>y.id===ed.dataset.edit); if(x)openEdit(x);}
+});
+$("prevM").addEventListener("click",()=>{if(S.month>0)S.month--; else {S.month=11; S.year--;} render();});
+$("nextM").addEventListener("click",()=>{if(S.month<11)S.month++; else {S.month=0; S.year++;} render();});
+$("moreBtn").addEventListener("click",()=>{const on=$("more").classList.toggle("on"); $("moreBtn").setAttribute("aria-expanded",String(on));});
+$("setBtn").addEventListener("click",()=>{const on=$("setForm").classList.toggle("on"); $("setBtn").setAttribute("aria-expanded",String(on));});
+$("connBtn").addEventListener("click",()=>{ $("cUrl").value=S.cfg?S.cfg.url:""; $("cSecret").value=S.cfg?S.cfg.secret:""; S.cfg=null; render(); });
+$("qaForm").addEventListener("submit",e=>{e.preventDefault(); quickAdd();});
+$("setForm").addEventListener("submit",e=>{e.preventDefault(); saveSettings();});
+$("setupForm").addEventListener("submit",e=>{e.preventDefault(); connect();});
+$("dCancel").addEventListener("click",closeEdit); $("dSave").addEventListener("click",saveEdit); $("dDel").addEventListener("click",delEdit);
+$("overlay").addEventListener("click",e=>{if(e.target.id==="overlay")closeEdit();});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&$("overlay").classList.contains("on"))closeEdit();});
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible"&&S.cfg)refresh(); });
+
+render();
+if(S.cfg)refresh();
+})();
+</script>
+</body>
+</html>
