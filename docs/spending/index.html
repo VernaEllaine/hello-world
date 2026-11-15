@@ -148,6 +148,10 @@ select.in{appearance:none; -webkit-appearance:none; color:var(--ink)}
   </form>
 
   <section aria-label="Entries">
+    <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px">
+      <span class="muted" style="font-size:13px" id="listTitle"></span>
+      <button class="link" type="button" id="allBtn" aria-pressed="false">All entries</button>
+    </div>
     <div class="list" id="entries"></div>
   </section>
 
@@ -157,7 +161,7 @@ select.in{appearance:none; -webkit-appearance:none; color:var(--ink)}
       <a class="link" id="sheetLink" href="#" target="_blank" rel="noopener" hidden>Open Google Sheet</a>
       <button class="link" type="button" id="connBtn">Connection</button>
       <span class="status" id="status" role="status" aria-live="polite"></span>
-      <span class="muted" style="font-size:11px; margin-left:auto">v5</span>
+      <span class="muted" style="font-size:11px; margin-left:auto">v6</span>
     </div>
     <form class="panel" id="setForm" novalidate>
       <label for="sMin">Minimum target<input class="in" id="sMin" inputmode="decimal" style="width:100px; font-family:var(--mono)"></label>
@@ -219,7 +223,7 @@ const DATE_RE=/^\d{4}-\d\d-\d\d$/;
 
 const cache=store.get("spend:cache",{entries:[],min:600,max:800,sheetUrl:""});
 const S={cfg:cfgStore.get(),entries:[],min:cache.min||600,max:cache.max||800,sheetUrl:cache.sheetUrl||"",
-  year:NOW_Y,month:NOW_M,busy:false,editing:null};
+  year:NOW_Y,month:NOW_M,busy:false,editing:null,showAll:false};
 
 /* ---------- Google Sheet API ---------- */
 async function api(action,data,cfg){
@@ -304,11 +308,14 @@ function render(){
   if(daysLeft&&leftMax>0) line+=` · ${fmt.format((leftMin>=0?leftMin:leftMax)/daysLeft)} a day`;
   $("line").innerHTML=line;
 
-  const list=S.entries.filter(inView).sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:(b.created||0)-(a.created||0));
+  const list=(S.showAll?S.entries.slice():S.entries.filter(inView)).sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:(b.created||0)-(a.created||0));
+  $("listTitle").textContent=S.showAll?`All entries (${list.length})`:`${MONTHS_LONG[m]} (${list.length})`;
+  $("allBtn").textContent=S.showAll?`Only ${MONTHS[m]} ${y}`:"All entries"; $("allBtn").setAttribute("aria-pressed",String(S.showAll));
+  const when=e=>DATE_RE.test(e.date)?`${Number(e.date.slice(8,10))} ${MONTHS[monthOf(e)]}${S.showAll?" "+yearOf(e):""}`:`Date not recognised: ${String(e.date)}`;
   $("entries").innerHTML=list.length?list.map(e=>`<button type="button" class="item" data-edit="${esc(e.id)}">
       <span class="t">${esc(e.note||e.cat)}</span><span class="a">${fmt.format(e.amount)}</span>
-      <span class="s">${Number(String(e.date).slice(8,10))} ${MONTHS[monthOf(e)]} · ${esc(e.cat)}</span></button>`).join("")
-    :`<div class="empty">Nothing logged in ${MONTHS_LONG[m]} yet.</div>`;
+      <span class="s">${esc(when(e))} · ${esc(e.cat)}</span></button>`).join("")
+    :`<div class="empty">${S.showAll?"Your sheet has no entries yet.":`Nothing logged in ${MONTHS_LONG[m]} yet.`}</div>`;
 
   if(!$("qCat").options.length)catOptions($("qCat"),"Groceries");
   const key=y+"-"+m; if($("qDate").dataset.month!==key){$("qDate").value=defaultDate(); $("qDate").dataset.month=key;}
@@ -320,7 +327,7 @@ function render(){
 /* ---------- actions ---------- */
 async function refresh(){
   setStatus("Syncing…");
-  try{ apply(await api("list")); setStatus(""); }
+  try{ const j=await api("list"); apply(j); const n=(j.entries||[]).length; setStatus(`${n} ${n===1?"entry":"entries"} loaded from your sheet.`); setTimeout(()=>{ if(/loaded from your sheet/.test($("status").textContent))setStatus(""); },3000); }
   catch(e){ setStatus(errText(e)+(S.entries.length?" Showing what was last loaded.":""),true); }
 }
 async function quickAdd(){
@@ -340,7 +347,7 @@ async function quickAdd(){
 function openEdit(e){
   S.editing=e;
   $("dAmt").value=String(e.amount); catOptions($("dCat"),e.cat);
-  $("dDate").value=e.date; $("dNote").value=e.note||"";
+  $("dDate").value=DATE_RE.test(e.date)?e.date:defaultDate(); $("dNote").value=e.note||"";
   $("dErr").textContent=""; const d=$("dDel"); d.textContent="Delete"; d.dataset.armed="";
   $("overlay").classList.add("on"); $("overlay").setAttribute("aria-hidden","false"); $("dAmt").focus();
 }
@@ -389,6 +396,7 @@ document.addEventListener("click",e=>{
 });
 $("prevM").addEventListener("click",()=>{if(S.month>0)S.month--; else {S.month=11; S.year--;} render();});
 $("nextM").addEventListener("click",()=>{if(S.month<11)S.month++; else {S.month=0; S.year++;} render();});
+$("allBtn").addEventListener("click",()=>{S.showAll=!S.showAll; render();});
 $("moreBtn").addEventListener("click",()=>{const on=$("more").classList.toggle("on"); $("moreBtn").setAttribute("aria-expanded",String(on));});
 $("setBtn").addEventListener("click",()=>{const on=$("setForm").classList.toggle("on"); $("setBtn").setAttribute("aria-expanded",String(on));});
 $("connBtn").addEventListener("click",()=>{ $("cUrl").value=S.cfg?S.cfg.url:""; $("cSecret").value=S.cfg?S.cfg.secret:""; S.cfg=null; render(); });
