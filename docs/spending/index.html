@@ -196,6 +196,19 @@ const store={
   get(k,d){try{const v=localStorage.getItem(k); return v?JSON.parse(v):d;}catch(e){return d;}},
   set(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
 };
+// The connection is also kept in a long-lived cookie, as a second copy in case the phone clears website storage.
+const cfgStore={
+  get(){
+    const c=store.get("spend:cfg",null); if(c&&c.url&&c.secret)return c;
+    try{const m=document.cookie.match(/(?:^|;\s*)spendcfg=([^;]+)/); if(m){const v=JSON.parse(decodeURIComponent(m[1])); if(v&&v.url&&v.secret){store.set("spend:cfg",v); return v;}}}catch(e){}
+    return null;
+  },
+  set(v){
+    store.set("spend:cfg",v);
+    try{document.cookie="spendcfg="+encodeURIComponent(JSON.stringify(v))+"; max-age=315360000; path=/hello-world/spending/; secure; samesite=strict";}catch(e){}
+    try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist();}catch(e){}
+  }
+};
 
 const now=new Date();
 const NOW_Y=now.getFullYear(), NOW_M=now.getMonth();
@@ -204,7 +217,7 @@ const todayStr=`${NOW_Y}-${pad(NOW_M+1)}-${pad(now.getDate())}`;
 const DATE_RE=/^\d{4}-\d\d-\d\d$/;
 
 const cache=store.get("spend:cache",{entries:[],min:600,max:800,sheetUrl:""});
-const S={cfg:store.get("spend:cfg",null),entries:cache.entries||[],min:cache.min||600,max:cache.max||800,sheetUrl:cache.sheetUrl||"",
+const S={cfg:cfgStore.get(),entries:cache.entries||[],min:cache.min||600,max:cache.max||800,sheetUrl:cache.sheetUrl||"",
   year:NOW_Y,month:NOW_M,busy:false,editing:null};
 
 /* ---------- Google Sheet API ---------- */
@@ -348,7 +361,7 @@ async function connect(){
   $("cErr").textContent=""; $("cBtn").disabled=true; $("cBtn").textContent="Connecting…";
   try{
     const j=await api("list",null,{url,secret});
-    S.cfg={url,secret}; store.set("spend:cfg",S.cfg); apply(j);
+    S.cfg={url,secret}; cfgStore.set(S.cfg); apply(j);
   }catch(e){ $("cErr").textContent=errText(e); }
   finally{ $("cBtn").disabled=false; $("cBtn").textContent="Connect"; }
 }
