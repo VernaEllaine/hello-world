@@ -338,8 +338,12 @@ async function saveSettings(){
   catch(e){ $("sErr").textContent=errText(e); }
 }
 async function connect(){
-  const url=$("cUrl").value.trim(), secret=$("cSecret").value.trim();
-  if(!/^https:\/\/script\.google(usercontent)?\.com\/.+/.test(url)){$("cErr").textContent="Paste the web app link from Apps Script. It starts with https://script.google.com/macros/s/"; return;}
+  let url=$("cUrl").value.trim().replace(/\s+/g,""), secret=$("cSecret").value.trim();
+  if(/^AKfy[\w-]{20,}$/.test(url)) url=`https://script.google.com/macros/s/${url}/exec`; // deployment ID pasted on its own
+  if(/^script\.google/i.test(url)) url="https://"+url;
+  if(/docs\.google\.com\/spreadsheets/i.test(url)){$("cErr").textContent="That's the link to the Google Sheet itself. The app needs the web app link: in Apps Script, tap Deploy → Manage deployments and copy the Web app URL (it ends in /exec)."; return;}
+  if(/script\.google\.com\/(home|d\/)/i.test(url)){$("cErr").textContent="That's the link to the script editor. The app needs the web app link: tap Deploy → Manage deployments and copy the Web app URL (it ends in /exec)."; return;}
+  if(!/^https:\/\/script\.google(usercontent)?\.com\/.+\/exec/i.test(url)){$("cErr").textContent="Paste the Web app URL from Apps Script (Deploy → Manage deployments). It starts with https://script.google.com/macros/s/ and ends in /exec."; return;}
   if(!secret){$("cErr").textContent="Enter the secret from the script."; return;}
   $("cErr").textContent=""; $("cBtn").disabled=true; $("cBtn").textContent="Connecting…";
   try{
